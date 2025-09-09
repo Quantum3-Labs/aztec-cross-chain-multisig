@@ -29,19 +29,23 @@ aztec start --sandbox
 > aztec-up 1.2.0
 > ```
 
-3. cd into `packages/aztec`
+3. Run the Aztec script
 
 ```bash
-cd ./packages/aztec
+yarn aztec:cross-chain-multisig
 ```
 
-4. Run the Aztec script
-
-```bash
-yarn cross-chain-multisig
-```
+4. Start editing the script file `./packages/aztec/scripts/cross_chain_multisig.ts`
 
 <br />
+
+**Compile Contract**
+
+1. Run the command to compile the Noir contact
+
+```bash
+yarn aztec:compile
+```
 
 **Reference Contract For Using Wormhole on Aztec and Arbitrum**
 Aztec: https://github.com/NethermindEth/aztec-wormhole-app-demo/blob/main/packages/aztec-contracts/emitter/src/main.nr

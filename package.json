@@ -9,5 +9,14 @@
   "private": true,
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "scripts": {
+    "aztec:compile": "yarn workspace cross-chain-multisig compile",
+    "aztec:deploy": "yarn workspace cross-chain-multisig deploy",
+    "aztec:test": "yarn workspace cross-chain-multisig test",
+    "aztec:cross-chain-multisig": "yarn workspace cross-chain-multisig cross-chain-multisig",
+    "arbitrum:build": "forge -C packages/arbitrum build",
+    "arbitrum:test": "forge -C packages/arbitrum test",
+    "arbitrum:deploy": "forge -C packages/arbitrum script script/DeployVault.s.sol"
+  }
 }

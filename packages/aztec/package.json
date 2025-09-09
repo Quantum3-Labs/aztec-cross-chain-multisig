@@ -1,9 +1,8 @@
 {
-  "name": "private_voting_codespace",
+  "name": "cross-chain-multisig",
   "version": "1.0.0",
   "main": "index.js",
-  "repository": "https://github.com/critesjosh/private_voting_codespace.git",
-  "author": "Josh Crites <jc@joshcrites.com>",
+  "author": "Q3x <q3x@q3x.com>",
   "license": "MIT",
   "private": true,
   "type": "module",
