@@ -3,7 +3,7 @@ src = "src"
 out = "out"
 libs = ["lib"]
 remappings = [
-    "wormhole/=lib/wormhole/",
+    "wormhole/=lib/wormhole-solidity-sdk/",
     "@openzeppelin/=lib/openzeppelin-contracts/"
 ]
 

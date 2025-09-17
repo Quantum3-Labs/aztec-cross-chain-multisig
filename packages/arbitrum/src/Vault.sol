@@ -3,7 +3,7 @@
 
 pragma solidity ^0.8.0;
 
-import "wormhole/ethereum/contracts/libraries/external/BytesLib.sol";
+import "wormhole/src/testing/helpers/BytesLib.sol";
 import "./VaultGetters.sol";
 
 /**

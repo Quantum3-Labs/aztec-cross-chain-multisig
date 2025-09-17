@@ -3,7 +3,7 @@
 
 pragma solidity ^0.8.0;
 
-import "wormhole/ethereum/contracts/interfaces/IWormhole.sol";
+import "wormhole/src/interfaces/IWormhole.sol";
 import "./VaultState.sol";
 
 /**
