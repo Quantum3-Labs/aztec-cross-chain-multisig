@@ -33,7 +33,7 @@ export async function deploySchnorrAccount(pxe: PXE) {
   const accountAddress = schnorrAccount.getAddress();
   logger.info(`📍 Account address: ${accountAddress}`);
 
-  // Register account (không deploy)
+  // Register account
   await schnorrAccount.register();
   logger.info("✅ Account registered with PXE");
 

@@ -1,27 +1,25 @@
 import "dotenv/config";
 import { AccountManager, Fr, createLogger } from "@aztec/aztec.js";
-import { MyCustomAccountContract } from "../src/accounts/MyCustomAccount.js";
 import { setupPXE } from "../src/utils/setup_pxe.js";
+import { MyCustomAccountContract } from "../src/accounts/MyCustomAccount.js";
 
 const logger = createLogger("aztec:deploy-account");
-logger.info("Connecting to PXE...");
+
 if (!process.env.SALT || !process.env.SECRET) {
-  throw new Error("Missing required environment variables: SALT and SECRET");
+  throw new Error("Missing SALT or SECRET in .env");
 }
 
 const SALT = Fr.fromString(process.env.SALT);
+
 async function deployAccount() {
-  console.log("🚀 Setting up PXE...");
+  logger.info("🚀 Setting up PXE...");
   const pxe = await setupPXE();
+  const secretKeyHex = process.env.SECRET!;
 
-  const encryptionSecretKey = Fr.random();
-
-  console.log("📝 Creating account...");
-  const accountContract = new MyCustomAccountContract();
-
+  const accountContract = new MyCustomAccountContract(secretKeyHex);
   const account = await AccountManager.create(
     pxe,
-    encryptionSecretKey,
+    Fr.fromString(secretKeyHex),
     accountContract,
     SALT
   );
@@ -29,9 +27,9 @@ async function deployAccount() {
   console.log("🔑 Account address:", account.getAddress().toString());
 
   if (await account.isDeployable()) {
-    console.log("💰 Account needs deployment but requires funds first.");
-    console.log("⚠️  Please fund this address with Fee Juice tokens first!");
-    console.log("Address:", account.getAddress().toString());
+    console.log("📦 Deploying account contract...");
+    await (await account.deploy()).wait();
+    console.log("✅ Account deployed successfully!");
   } else {
     console.log("📋 Registering account...");
     await account.register();
@@ -40,6 +38,12 @@ async function deployAccount() {
 
   const wallet = await account.getWallet();
   console.log("💼 Wallet ready at:", wallet.getAddress().toString());
+
+  const contracts = await pxe.getContracts();
+  console.log("📋 Contracts in PXE:");
+  contracts.forEach(c => {
+    console.log(` - ${c.toString()}`);
+  });
 
   return { wallet, account };
 }
