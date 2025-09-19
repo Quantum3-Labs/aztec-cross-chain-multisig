@@ -8,13 +8,15 @@ contract DeployArbitrumIntentVault is Script {
     function run() external {
         vm.startBroadcast();
 
-        new ArbitrumIntentVault(
-            payable(0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C), // wormhole
-            23,                                                 // chainId_
-            421614,                                             // evmChainId_
-            1,                                                  // finality_
-            0x781a68C3149d13D05a5F0C9E22C9D321d6f620E1          // donation contract
+        ArbitrumIntentVault vault = new ArbitrumIntentVault(
+            payable(0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35), // Wormhole on Arbitrum Sepolia 
+            56,                                                    // Aztec chainId in Wormhole (not 23!)
+            421614,                                               // Arbitrum Sepolia EVM chainId
+            1,                                                    // finality
+            0x781a68C3149d13D05a5F0C9E22C9D321d6f620E1           // donation contract (already deployed)
         );
+
+        console.log("ArbitrumIntentVault deployed at:", address(vault));
 
         vm.stopBroadcast();
     }

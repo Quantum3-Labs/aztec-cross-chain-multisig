@@ -67,25 +67,22 @@ contract ArbitrumIntentVault is VaultGetters {
     }
 
     function _processIntentPayload(bytes memory payload) internal {
-        require(payload.length >= 96, "Payload too short");
+        // Aztec sends 8 chunks of 31 bytes each = 248 bytes total
+        require(payload.length >= 124, "Payload too short");
 
-        bytes32 txId;
-        assembly {
-            txId := mload(add(payload, 32))
-        }
+        // Parse 31-byte chunks from Aztec
+        bytes32 txId = bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 0, 31)));
+        
+        uint256 intentTypeRaw = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 31, 31))));
+        
+        // Extract Ethereum address from payload_3 (bytes 11-30 of the 31-byte chunk)
+        bytes memory addressBytes = BytesLib.slice(payload, 62 + 11, 20);
+        address targetAddress = address(uint160(bytes20(addressBytes)));
+        
+        uint256 amount = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 93, 31))));
+
         require(txId != bytes32(0), "Invalid txId");
         require(_state.arbitrumMessages[txId] == 0, "Already processed");
-
-        uint256 intentTypeRaw;
-        address targetAddress;
-        uint256 amount;
-
-        assembly {
-            intentTypeRaw := mload(add(payload, 64))
-            let addressData := mload(add(payload, 96))
-            targetAddress := shr(96, addressData)
-            amount := mload(add(payload, 128))
-        }
 
         IntentType intentType = IntentType(intentTypeRaw);
 
@@ -154,11 +151,11 @@ contract ArbitrumIntentVault is VaultGetters {
         address target,
         bytes memory payload
     ) internal returns (bool) {
-        if (payload.length > 160 && target != address(0)) {
+        if (payload.length > 155 && target != address(0)) {
             bytes memory callData = BytesLib.slice(
                 payload,
-                160,
-                payload.length - 160
+                155,
+                payload.length - 155
             );
             (bool success, ) = target.call(callData);
             return success;

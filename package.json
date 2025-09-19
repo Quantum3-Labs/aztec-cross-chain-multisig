@@ -18,5 +18,10 @@
     "arbitrum:build": "forge -C packages/arbitrum build",
     "arbitrum:test": "forge -C packages/arbitrum test",
     "arbitrum:deploy": "forge -C packages/arbitrum script script/DeployVault.s.sol"
+  },
+  "dependencies": {
+    "@types/node": "^24.5.2",
+    "dotenv": "^17.2.2",
+    "ethers": "^6.15.0"
   }
 }
