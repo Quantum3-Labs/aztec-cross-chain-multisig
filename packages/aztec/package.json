@@ -12,9 +12,9 @@
     "clear-store": "rm -rf ./store",
     "codegen": "aztec codegen target --outdir src/artifacts",
     "compile": "aztec-nargo compile && aztec-postprocess-contract",
-    "deploy": "node --loader ts-node/esm scripts/deploy_contract.ts",
+    "deploy": "node --loader ts-node/esm scripts/deploy_multisig_account.ts",
     "deploy-account": "node --loader ts-node/esm scripts/deploy_custom_account.ts",
-    "test-custom-account": "node --loader ts-node/esm scripts/test_custom_account.ts",
+    "test-multisig": "node --loader ts-node/esm scripts/test_flow_multisig.ts",
     "interaction-existing-contract": "node --loader ts-node/esm scripts/interaction_existing_contract.ts",
     "multiple-pxe": "node --loader ts-node/esm scripts/multiple_pxe.ts",
     "get-block": "node --loader ts-node/esm scripts/get_block.ts",
@@ -28,6 +28,7 @@
   "dependencies": {
     "@aztec/accounts": "2.0.2",
     "@aztec/aztec.js": "2.0.2",
+    "@aztec/circuits.js": "^0.76.4",
     "@aztec/foundation": "2.0.2",
     "@aztec/kv-store": "2.0.2",
     "@aztec/noir-contracts.js": "2.0.2",
@@ -45,7 +46,7 @@
     "typescript": "^5.4.4"
   },
   "resolutions": {
-    "@aztec/*": "2.0.2"
+    "@aztec/*": "workspace:*"
   },
   "jest": {
     "testTimeout": 200000

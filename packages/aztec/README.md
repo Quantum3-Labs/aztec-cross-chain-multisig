@@ -191,3 +191,33 @@ pull requests. Please read it before contributing changes.
     <img src="https://img.shields.io/badge/Twitter-000000?logo=x&logoColor=white&style=for-the-badge" alt="Twitter (X)">
   </a>
 </p>
+
+
+
+---
+
+## 🔐 Multisig Demo (Testnet)
+
+This repo also contains a **demo multisig account flow** using Noir + TypeScript scripts:
+
+- Contract: `MultiSchnorrAccount`  
+  - Stores multiple Schnorr public keys  
+  - Keeps a threshold value  
+  - Allows `approve_public_authwit(inner_hash)` from multiple signers  
+  - Validates threshold via `verify_public_authwit(inner_hash)` and resets approvals
+
+- Scripts:  
+  - `scripts/deploy_multisig.ts`: deploys a multisig account with 3 Schnorr public keys, saves environment variables (`.env.multisig`)  
+  - `scripts/test_flow_multisig.ts`: runs a full flow where two signers approve an `innerHash` and the contract verifies threshold  
+
+⚠️ **Note:**  
+This demo currently stops at **auth witness approvals**.  
+There is no on-chain Schnorr signature verification inside the Noir contract itself — this part is delegated to the **PXE / kernel layer** of Aztec.  
+
+That means:
+- Can demo a **threshold-based multisig approval mechanism** on Aztec testnet.  
+- Actual Schnorr signature verification for transactions is still handled off-circuit by PXE.  
+
+This makes the repo a **working reference for multisig patterns in Aztec testnet**, but not yet a production-grade multisig wallet.
+
+---

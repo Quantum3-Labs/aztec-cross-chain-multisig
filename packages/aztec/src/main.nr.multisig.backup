@@ -1,0 +1,52 @@
+use dep::aztec::macros::aztec;
+
+#[aztec]
+pub contract MultiSchnorrAccount {
+    use aztec::{
+        macros::{
+            functions::{initializer, private, public},
+            storage::storage,
+        },
+        protocol_types::address::AztecAddress,
+        state_vars::{Map, PublicMutable},
+    };
+
+    global IS_VALID_SELECTOR: Field = 0xabf64ad4;
+
+    #[storage]
+    struct Storage<Context> {
+        pubkeys_x: Map<u8, PublicMutable<Field, Context>, Context>,
+        pubkeys_y: Map<u8, PublicMutable<Field, Context>, Context>,
+        threshold: PublicMutable<u8, Context>,
+    }
+
+    #[public]
+    #[initializer]
+    fn constructor(
+        pk1_x: Field, pk1_y: Field,
+        pk2_x: Field, pk2_y: Field,
+        pk3_x: Field, pk3_y: Field,
+        m: u8
+    ) {
+        storage.pubkeys_x.at(1).write(pk1_x);
+        storage.pubkeys_y.at(1).write(pk1_y);
+
+        storage.pubkeys_x.at(2).write(pk2_x);
+        storage.pubkeys_y.at(2).write(pk2_y);
+
+        storage.pubkeys_x.at(3).write(pk3_x);
+        storage.pubkeys_y.at(3).write(pk3_y);
+
+        storage.threshold.write(m);
+    }
+
+    #[private]
+    fn entrypoint(_payload_hash: Field) -> Field {
+        IS_VALID_SELECTOR
+    }
+
+    #[public]
+    fn get_threshold() -> u8 {
+        storage.threshold.read()
+    }
+}
