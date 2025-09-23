@@ -1,11 +1,12 @@
 [package]
-name = "easy_private_voting_contract"
-type = "contract"
+name = "custom_account"
 authors = [""]
 compiler_version = ">=0.18.0"
+type = "contract"
+
+[features]
+enums = true
 
 [dependencies]
-aztec = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v1.2.1", directory = "noir-projects/aztec-nr/aztec" }
-schnorr = { tag = "v0.1.3", git = "https://github.com/noir-lang/schnorr" }
-token = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v1.2.1", directory = "noir-projects/noir-contracts/contracts/app/token_contract" }
-wormhole = { git = "https://github.com/NethermindEth/wormhole", tag = "aztec", directory = "aztec/contracts" }
+aztec = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v2.0.2", directory = "noir-projects/aztec-nr/aztec" }
+schnorr = { git = "https://github.com/noir-lang/schnorr", tag = "v0.1.3" }

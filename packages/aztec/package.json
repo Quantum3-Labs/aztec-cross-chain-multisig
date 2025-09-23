@@ -7,15 +7,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test-cross-chain": "node --loader ts-node/esm scripts/test_cross_chain.ts",
-    "register-wormhole": "node --loader ts-node/esm scripts/register_wormhole.ts",
     "gen-key": "node --loader ts-node/esm scripts/gen_keypair.ts",
     "clean": "rm -rf ./src/artifacts ./target",
     "clear-store": "rm -rf ./store",
     "codegen": "aztec codegen target --outdir src/artifacts",
-    "compile": "${AZTEC_NARGO:-nargo} compile",
+    "compile": "aztec-nargo compile && aztec-postprocess-contract",
     "deploy": "node --loader ts-node/esm scripts/deploy_contract.ts",
-    "deploy-account": "node --loader ts-node/esm scripts/deploy_my_custom_account.ts",
+    "deploy-account": "node --loader ts-node/esm scripts/deploy_custom_account.ts",
+    "test-custom-account": "node --loader ts-node/esm scripts/test_custom_account.ts",
     "interaction-existing-contract": "node --loader ts-node/esm scripts/interaction_existing_contract.ts",
     "multiple-pxe": "node --loader ts-node/esm scripts/multiple_pxe.ts",
     "get-block": "node --loader ts-node/esm scripts/get_block.ts",
@@ -27,12 +26,14 @@
     "update-readme-version": "node ./.github/scripts/update-readme-version.js"
   },
   "dependencies": {
-    "@aztec/accounts": "1.2.0",
-    "@aztec/aztec.js": "1.2.0",
-    "@aztec/noir-contracts.js": "1.2.0",
-    "@aztec/protocol-contracts": "1.2.0",
-    "@aztec/pxe": "1.2.0",
-    "@aztec/stdlib": "1.2.0"
+    "@aztec/accounts": "2.0.2",
+    "@aztec/aztec.js": "2.0.2",
+    "@aztec/foundation": "2.0.2",
+    "@aztec/kv-store": "2.0.2",
+    "@aztec/noir-contracts.js": "2.0.2",
+    "@aztec/protocol-contracts": "2.0.2",
+    "@aztec/pxe": "2.0.2",
+    "@aztec/stdlib": "2.0.2"
   },
   "devDependencies": {
     "@types/jest": "^29.5.11",
@@ -42,6 +43,9 @@
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.4"
+  },
+  "resolutions": {
+    "@aztec/*": "2.0.2"
   },
   "jest": {
     "testTimeout": 200000
