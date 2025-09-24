@@ -1,23 +1,37 @@
 use dep::aztec::macros::aztec;
 
 #[aztec]
-pub contract MultiSchnorrAccount {
-    use aztec::{
+pub contract MultiSchnorrWormholeAccount {
+    use dep::aztec::{
+        authwit::{
+            account::AccountActions,
+            entrypoint::{app::AppPayload, fee::FeePayload},
+        },
+        context::PrivateContext,
         macros::{
-            functions::{initializer, private, public},
+            functions::{initializer, noinitcheck, private, public, view},
             storage::storage,
         },
-        protocol_types::address::AztecAddress,
-        state_vars::{Map, PublicMutable},
+        oracle::auth_witness::get_auth_witness,
+        state_vars::{Map, PublicMutable, PublicImmutable},
+        protocol_types::address::EthAddress,
+        hash::pedersen_hash,
     };
 
-    global IS_VALID_SELECTOR: Field = 0xabf64ad4;
+    use dep::std::embedded_curve_ops::EmbeddedCurvePoint;
 
     #[storage]
     struct Storage<Context> {
-        pubkeys_x: Map<u8, PublicMutable<Field, Context>, Context>,
-        pubkeys_y: Map<u8, PublicMutable<Field, Context>, Context>,
-        threshold: PublicMutable<u8, Context>,
+        pk_x: Map<u8, PublicImmutable<Field, Context>, Context>,
+        pk_y: Map<u8, PublicImmutable<Field, Context>, Context>,
+        threshold: PublicImmutable<u8, Context>,
+        portal_address: PublicImmutable<EthAddress, Context>,
+        wormhole_emitter: PublicImmutable<EthAddress, Context>,
+        cross_chain_nonce: PublicMutable<u32, Context>,
+        approvals: Map<Field, PublicMutable<u8, Context>, Context>,
+        cross_chain_approvals: Map<Field, Map<u8, PublicMutable<bool, Context>, Context>, Context>,
+        cross_chain_approval_count: Map<Field, PublicMutable<u8, Context>, Context>,
+        executed_cross_chain: Map<Field, PublicMutable<bool, Context>, Context>,
     }
 
     #[public]
@@ -26,27 +40,179 @@ pub contract MultiSchnorrAccount {
         pk1_x: Field, pk1_y: Field,
         pk2_x: Field, pk2_y: Field,
         pk3_x: Field, pk3_y: Field,
-        m: u8
+        m: u8,
+        portal: EthAddress,
+        wormhole_emitter: EthAddress,
     ) {
-        storage.pubkeys_x.at(1).write(pk1_x);
-        storage.pubkeys_y.at(1).write(pk1_y);
-
-        storage.pubkeys_x.at(2).write(pk2_x);
-        storage.pubkeys_y.at(2).write(pk2_y);
-
-        storage.pubkeys_x.at(3).write(pk3_x);
-        storage.pubkeys_y.at(3).write(pk3_y);
-
-        storage.threshold.write(m);
+        assert(m > 0, "Threshold must be > 0");
+        assert(m <= 3, "Threshold cannot exceed 3");
+        storage.pk_x.at(1).initialize(pk1_x);
+        storage.pk_y.at(1).initialize(pk1_y);
+        storage.pk_x.at(2).initialize(pk2_x);
+        storage.pk_y.at(2).initialize(pk2_y);
+        storage.pk_x.at(3).initialize(pk3_x);
+        storage.pk_y.at(3).initialize(pk3_y);
+        storage.threshold.initialize(m);
+        storage.portal_address.initialize(portal);
+        storage.wormhole_emitter.initialize(wormhole_emitter);
+        storage.cross_chain_nonce.write(0);
     }
 
     #[private]
-    fn entrypoint(_payload_hash: Field) -> Field {
-        IS_VALID_SELECTOR
+    #[noinitcheck]
+    fn entrypoint(app: AppPayload, fee: FeePayload, cancellable: bool) {
+        let actions = AccountActions::init(&mut context, is_valid_impl);
+        actions.entrypoint(app, fee, cancellable);
+    }
+
+    #[private]
+    #[noinitcheck]
+    #[view]
+    fn verify_private_authwit(inner_hash: Field) -> Field {
+        let actions = AccountActions::init(&mut context, is_valid_impl);
+        actions.verify_private_authwit(inner_hash)
+    }
+
+    #[contract_library_method]
+    fn is_valid_impl(context: &mut PrivateContext, outer_hash: Field) -> bool {
+        let storage = Storage::init(context);
+        let witness: [Field; 64] = unsafe { get_auth_witness(outer_hash) };
+        let mut signature: [u8; 64] = [0; 64];
+        for i in 0..64 {
+            signature[i] = witness[i] as u8;
+        }
+        let mut valid_signatures = 0;
+        for signer_index in 1..4 {
+            let pk_x: Field = storage.pk_x.at(signer_index).read();
+            let pk_y: Field = storage.pk_y.at(signer_index).read();
+            if (pk_x != Field::from(0)) & (pk_y != Field::from(0)) {
+                let pub_key = EmbeddedCurvePoint { x: pk_x, y: pk_y, is_infinite: false };
+                if schnorr::verify_signature(pub_key, signature, outer_hash.to_be_bytes::<32>()) {
+                    valid_signatures += 1;
+                }
+            }
+        }
+        let threshold: u8 = storage.threshold.read();
+        valid_signatures >= threshold
     }
 
     #[public]
-    fn get_threshold() -> u8 {
-        storage.threshold.read()
+    fn propose_cross_chain_tx(
+        target_chain: u16,
+        target_contract: Field,
+        amount: u128,
+        recipient: Field,
+        intent_type: u8,
+        signer_index: u8,
+    ) -> pub Field {
+        assert((signer_index >= 1) & (signer_index <= 3), "Invalid signer index");
+        assert(intent_type <= 4, "Invalid intent type");
+        assert(target_chain > 0, "Invalid target chain");
+        let current_nonce = storage.cross_chain_nonce.read();
+        let new_nonce = current_nonce + 1;
+        storage.cross_chain_nonce.write(new_nonce);
+        let tx_hash = pedersen_hash([
+            new_nonce as Field,
+            target_chain as Field,
+            target_contract,
+            amount as Field,
+            recipient,
+            intent_type as Field,
+        ], 0);
+        storage.cross_chain_approval_count.at(tx_hash).write(1);
+        storage.cross_chain_approvals.at(tx_hash).at(signer_index).write(true);
+        storage.executed_cross_chain.at(tx_hash).write(false);
+        tx_hash
     }
+
+    #[public]
+    fn approve_cross_chain_tx(tx_hash: Field, signer_index: u8) {
+        assert((signer_index >= 1) & (signer_index <= 3), "Invalid signer index");
+        let already_approved = storage.cross_chain_approvals.at(tx_hash).at(signer_index).read();
+        assert(!already_approved, "Already approved");
+        let already_executed = storage.executed_cross_chain.at(tx_hash).read();
+        assert(!already_executed, "Already executed");
+        storage.cross_chain_approvals.at(tx_hash).at(signer_index).write(true);
+        let current_count = storage.cross_chain_approval_count.at(tx_hash).read();
+        storage.cross_chain_approval_count.at(tx_hash).write(current_count + 1);
+    }
+
+    #[public]
+    fn execute_cross_chain_tx(
+        nonce: u32,
+        target_chain: u16,
+        target_contract: Field,
+        amount: u128,
+        recipient: Field,
+        intent_type: u8,
+    ) -> pub bool {
+        let tx_hash = pedersen_hash([
+            nonce as Field,
+            target_chain as Field,
+            target_contract,
+            amount as Field,
+            recipient,
+            intent_type as Field,
+        ], 0);
+        let already_executed = storage.executed_cross_chain.at(tx_hash).read();
+        assert(!already_executed, "Already executed");
+        let approval_count = storage.cross_chain_approval_count.at(tx_hash).read();
+        let threshold = storage.threshold.read();
+        assert(approval_count >= threshold, "Not enough approvals");
+        storage.executed_cross_chain.at(tx_hash).write(true);
+        let wormhole_payload = pedersen_hash([
+            nonce as Field,
+            target_chain as Field,
+            target_contract,
+            amount as Field,
+            recipient,
+            intent_type as Field,
+        ], 1);
+        let portal = storage.portal_address.read();
+        context.message_portal(portal, wormhole_payload);
+        true
+    }
+
+    #[public]
+    fn handle_cross_chain_message(
+        _emitter_chain: u16,
+        _emitter_address: Field,
+        _sequence: u64,
+        _payload: Field,
+    ) -> pub bool {
+        true
+    }
+
+    #[public]
+    fn get_threshold() -> pub u8 { storage.threshold.read() }
+
+    #[public]
+    fn get_pk(i: u8) -> pub (Field, Field) {
+        assert((i >= 1) & (i <= 3), "Invalid key index");
+        (storage.pk_x.at(i).read(), storage.pk_y.at(i).read())
+    }
+
+    #[public]
+    fn get_cross_chain_nonce() -> pub u32 { storage.cross_chain_nonce.read() }
+
+    #[public]
+    fn get_cross_chain_approval_count(tx_hash: Field) -> pub u8 {
+        storage.cross_chain_approval_count.at(tx_hash).read()
+    }
+
+    #[public]
+    fn has_approved_cross_chain(tx_hash: Field, signer_index: u8) -> pub bool {
+        storage.cross_chain_approvals.at(tx_hash).at(signer_index).read()
+    }
+
+    #[public]
+    fn is_cross_chain_executed(tx_hash: Field) -> pub bool {
+        storage.executed_cross_chain.at(tx_hash).read()
+    }
+
+    #[public]
+    fn get_portal_address() -> pub EthAddress { storage.portal_address.read() }
+
+    #[public]
+    fn get_wormhole_emitter() -> pub EthAddress { storage.wormhole_emitter.read() }
 }
