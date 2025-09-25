@@ -1,21 +1,85 @@
-import { GrumpkinScalar, Grumpkin } from "@aztec/aztec.js";
+import "dotenv/config";
+import fs from "fs";
+import path from "path";
+import { Fr } from "@aztec/aztec.js";
+import { GrumpkinScalar } from "@aztec/foundation/fields";
+import { Grumpkin } from "@aztec/foundation/crypto";
 
-async function main() {
-  const secret = GrumpkinScalar.random();
-  const salt = GrumpkinScalar.random();
+const ENV_PATH = process.env.ENV_PATH || path.resolve(process.cwd(), ".env");
 
-  const grumpkin = new Grumpkin();
-  const pub = await grumpkin.mul(Grumpkin.generator, secret);
+const toHex0x = (x: { toString(): string }) =>
+  "0x" + BigInt(x.toString()).toString(16).padStart(64, "0");
 
-  console.log("SECRET =", secret.toString());
-  console.log("SALT   =", salt.toString());
-  console.log("PUBKEY =", {
-    x: pub.x.toString(),
-    y: pub.y.toString(),
-  });
+function readEnvLines(p: string): string[] {
+  if (!fs.existsSync(p)) return [];
+  return fs.readFileSync(p, "utf8").split(/\r?\n/);
 }
 
-main().catch((err) => {
-  console.error("❌ Failed:", err);
-  process.exit(1);
-});
+function writeEnvLines(p: string, lines: string[]) {
+  fs.writeFileSync(p, lines.join("\n"));
+}
+
+function updateEnv(lines: string[], kv: Record<string, string>): string[] {
+  const idx: Record<string, number> = {};
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (!l || l.trim().startsWith("#")) continue;
+    const m = l.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    if (m) idx[m[1]] = i;
+  }
+  for (const [k, v] of Object.entries(kv)) {
+    if (idx[k] !== undefined) {
+      const i = idx[k];
+      const leading = (lines[i].match(/^\s*/) || [""])[0];
+      lines[i] = `${leading}${k}=${v}`;
+    } else {
+      if (lines.length && lines[lines.length - 1] !== "") lines.push("");
+      lines.push(`${k}=${v}`);
+    }
+  }
+  return lines;
+}
+
+async function main() {
+  const secret = Fr.random();
+  const salt = Fr.random();
+  const priv1 = GrumpkinScalar.random();
+  const priv2 = GrumpkinScalar.random();
+  const priv3 = GrumpkinScalar.random();
+
+  const grumpkin = new Grumpkin();
+  const gen = grumpkin.generator();
+  const pub1 = await grumpkin.mul(gen, priv1);
+  const pub2 = await grumpkin.mul(gen, priv2);
+  const pub3 = await grumpkin.mul(gen, priv3);
+
+  const kv: Record<string, string> = {
+    SECRET_KEY: toHex0x(secret),
+    SALT: toHex0x(salt),
+    PRIV1: toHex0x(priv1),
+    PRIV2: toHex0x(priv2),
+    PRIV3: toHex0x(priv3),
+    PUB1_X: toHex0x(pub1.x),
+    PUB1_Y: toHex0x(pub1.y),
+    PUB2_X: toHex0x(pub2.x),
+    PUB2_Y: toHex0x(pub2.y),
+    PUB3_X: toHex0x(pub3.x),
+    PUB3_Y: toHex0x(pub3.y),
+  };
+
+  const lines = readEnvLines(ENV_PATH);
+  const out = updateEnv(lines, kv);
+  writeEnvLines(ENV_PATH, out);
+
+  console.log("UPDATED_ENV_PATH=", ENV_PATH);
+  console.log("SECRET_KEY=", kv.SECRET_KEY);
+  console.log("SALT=", kv.SALT);
+  console.log("PRIV1=", kv.PRIV1);
+  console.log("PRIV2=", kv.PRIV2);
+  console.log("PRIV3=", kv.PRIV3);
+  console.log("PUB1_X=", kv.PUB1_X, "PUB1_Y=", kv.PUB1_Y);
+  console.log("PUB2_X=", kv.PUB2_X, "PUB2_Y=", kv.PUB2_Y);
+  console.log("PUB3_X=", kv.PUB3_X, "PUB3_Y=", kv.PUB3_Y);
+}
+
+main().catch(e => { console.error(e); process.exit(1); });

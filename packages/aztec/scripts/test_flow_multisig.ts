@@ -1,199 +1,117 @@
-import { AztecAddress, Fr, createLogger } from "@aztec/aztec.js";
-import { getSchnorrAccount } from "@aztec/accounts/schnorr";
-import { GrumpkinScalar } from "@aztec/foundation/fields";
-import { MultiSchnorrAccountContract } from "../src/artifacts/MultiSchnorrAccount.js";
-import { setupPXE } from "../src/utils/setup_pxe.js";
+import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import { AztecAddress, Fr, EthAddress } from "@aztec/aztec.js";
+import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee/testing";
+import { getSchnorrAccount } from "@aztec/accounts/schnorr";
+import { GrumpkinScalar } from "@aztec/foundation/fields";
+import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
+import { MultiSchnorrPortalAccountContract } from "../src/artifacts/MultiSchnorrPortalAccount.js";
+import { setupPXE } from "../src/utils/setup_pxe.js";
+import { getSponsoredFPCInstance } from "../src/utils/sponsored_fpc.js";
 
-interface CrossChainConfig {
-  DEPLOYED_ADDRESS: string;
-  PRIV1: string;
-  PRIV2: string;
-  PRIV3: string;
-  SECRET_KEY: string;
-  SALT: string;
-  ARBITRUM_CHAIN_ID: string;
-  PORTAL_ADDRESS: string;
-  WORMHOLE_EMITTER: string;
-  THRESHOLD: string;
-}
+const toBig = (hex: string) => BigInt(hex);
+const toFr = (hex: string) => Fr.fromString(toBig(hex).toString());
+const toScalar = (hex: string) => GrumpkinScalar.fromString(toBig(hex).toString());
+const parseEth = (s: string) => EthAddress.fromString("0x" + s.replace(/^0x/i, "").toLowerCase());
 
-function loadConfig(): CrossChainConfig {
-  const envPath = path.resolve(process.cwd(), ".env.crosschain");
-  if (!fs.existsSync(envPath)) {
-    throw new Error(".env.crosschain file not found. Run deploy script first.");
-  }
-  
-  const envContent = fs.readFileSync(envPath, "utf8");
-  const config: any = {};
-  
-  envContent.split("\n").forEach(line => {
-    if (line.includes("=") && !line.startsWith("#") && line.trim()) {
-      const [key, value] = line.split("=");
-      config[key.trim()] = value.trim();
-    }
-  });
-  
-  // Validate required fields
-  const required = ['DEPLOYED_ADDRESS', 'PRIV1', 'SECRET_KEY', 'SALT', 'THRESHOLD'];
-  for (const field of required) {
-    if (!config[field]) {
-      throw new Error(`Missing required config: ${field}`);
+function loadEnv(): Record<string, string> {
+  const files = [".env"].map(p => path.resolve(process.cwd(), p));
+  const env: Record<string, string> = {};
+  for (const f of files) {
+    if (!fs.existsSync(f)) continue;
+    const lines = fs.readFileSync(f, "utf8").split(/\r?\n/);
+    for (const l of lines) {
+      if (!l || l.trim().startsWith("#")) continue;
+      const i = l.indexOf("=");
+      if (i > 0) env[l.slice(0, i).trim()] = l.slice(i + 1).trim();
     }
   }
-  
-  return config as CrossChainConfig;
+  return env;
 }
 
-async function testBasicMultisig() {
-  const logger = createLogger("test-basic-multisig");
-  logger.info("Starting basic multisig function tests on Aztec...");
+async function main() {
+  const cfg = loadEnv();
 
-  // Step 1: Load configuration
-  logger.info("Step 1: Loading configuration...");
-  const config = loadConfig();
-  logger.info(`Contract Address: ${config.DEPLOYED_ADDRESS}`);
-  logger.info(`Threshold: ${config.THRESHOLD}`);
+  const multisigAddrStr = cfg.MULTISIG_ADDRESS || cfg.DEPLOYED_ADDRESS;
+  if (!multisigAddrStr) throw new Error("Missing MULTISIG_ADDRESS/DEPLOYED_ADDRESS");
 
-  // Step 2: Setup PXE connection
-  logger.info("Step 2: Setting up PXE connection...");
+  const secretKey = toFr(cfg.SECRET_KEY!);
+  const salt = toFr(cfg.SALT!);
+  const priv1 = toScalar(cfg.PRIV1!);
+
+  const targetChain = Number(cfg.TARGET_CHAIN || cfg.ARBITRUM_CHAIN_ID || "421614");
+  const targetContract = parseEth(cfg.TARGET_CONTRACT || cfg.ARBITRUM_INTENT_VAULT || cfg.PORTAL || "0x0000000000000000000000000000000000000000");
+  const amount = cfg.AMOUNT ? BigInt(cfg.AMOUNT) : 0n;
+  const intentType = Number(cfg.INTENT_TYPE || "1");
+  const recipient = cfg.RECIPIENT ? toFr(cfg.RECIPIENT) : Fr.random();
+
   const pxe = await setupPXE();
-  const nodeInfo = await pxe.getNodeInfo();
-  logger.info(`Connected to Aztec node version: ${nodeInfo.nodeVersion}`);
+  const sponsoredFPC = await getSponsoredFPCInstance();
+  await pxe.registerContract({ instance: sponsoredFPC, artifact: SponsoredFPCContract.artifact });
+  const fee = { paymentMethod: new SponsoredFeePaymentMethod(sponsoredFPC.address) };
 
-  // Step 3: Setup wallet and contract instance
-  logger.info("Step 3: Setting up wallet and contract...");
-  const secretKey = Fr.fromString(config.SECRET_KEY);
-  const salt = Fr.fromString(config.SALT);
-  const priv1 = GrumpkinScalar.fromString(config.PRIV1);
-  
-  const signerAccount = await getSchnorrAccount(pxe, secretKey, priv1, salt);
-  const wallet = await signerAccount.getWallet();
-  const signerAddress = wallet.getAddress();
-  
-  logger.info(`Signer address: ${signerAddress.toString()}`);
+  const acct = await getSchnorrAccount(pxe, secretKey, priv1, salt);
+  const wallet = await acct.getWallet();
+  const from: AztecAddress = wallet.getAddress();
 
-  const contractAddress = AztecAddress.fromString(config.DEPLOYED_ADDRESS);
-  const multisig = await MultiSchnorrAccountContract.at(contractAddress, wallet);
-  
-  // Step 4: Test view functions
-  logger.info("Step 4: Testing view functions...");
-  
-  try {
-    // Test threshold
-    const threshold = await multisig.methods
-      .get_threshold()
-      .simulate({ from: signerAddress });
-    logger.info(`✅ Threshold: ${threshold}`);
-    
-    if (threshold.toString() !== config.THRESHOLD) {
-      logger.warn(`⚠️  Threshold mismatch: expected ${config.THRESHOLD}, got ${threshold}`);
-    }
+  const multisig = await MultiSchnorrPortalAccountContract.at(AztecAddress.fromString(multisigAddrStr), wallet);
 
-    // Test public keys
-    logger.info("Testing public key retrieval...");
-    for (let i = 1; i <= 3; i++) {
-      const [pk_x, pk_y] = await multisig.methods
-        .get_pk(i)
-        .simulate({ from: signerAddress });
-      
-      logger.info(`✅ Signer ${i} public key:`);
-      logger.info(`   X: ${pk_x.toString()}`);
-      logger.info(`   Y: ${pk_y.toString()}`);
-    }
+  const thresh = await multisig.methods.get_threshold().simulate({ from });
+  const beforeNonce = await multisig.methods.get_cross_chain_nonce().simulate({ from });
 
-    // Test cross-chain specific functions
-    logger.info("Testing cross-chain view functions...");
-    
-    const crossChainNonce = await multisig.methods
-      .get_cross_chain_nonce()
-      .simulate({ from: signerAddress });
-    logger.info(`✅ Cross-chain nonce: ${crossChainNonce}`);
+  const proposedHash = await multisig.methods.propose_cross_chain_tx(
+    targetChain,
+    targetContract,
+    amount,
+    recipient,
+    intentType,
+    1
+  ).simulate({ from });
 
-    const portalAddress = await multisig.methods
-      .get_portal_address()
-      .simulate({ from: signerAddress });
-    logger.info(`✅ Portal address: ${portalAddress.toString()}`);
+  const sendProp = multisig.methods.propose_cross_chain_tx(
+    targetChain,
+    targetContract,
+    amount,
+    recipient,
+    intentType,
+    1
+  ).send({ from, fee });
+  await sendProp.wait({ timeout: 180000 });
 
-    const wormholeEmitter = await multisig.methods
-      .get_wormhole_emitter()
-      .simulate({ from: signerAddress });
-    logger.info(`✅ Wormhole emitter: ${wormholeEmitter.toString()}`);
+  const afterNonce = await multisig.methods.get_cross_chain_nonce().simulate({ from });
 
-  } catch (error) {
-    logger.error("❌ View function test failed:", error);
-    throw error;
+  if (Number(thresh) > 1) {
+    const a2 = multisig.methods.approve_cross_chain_tx(proposedHash, 2).send({ from, fee });
+    await a2.wait({ timeout: 180000 });
+  }
+  if (Number(thresh) > 2) {
+    const a3 = multisig.methods.approve_cross_chain_tx(proposedHash, 3).send({ from, fee });
+    await a3.wait({ timeout: 180000 });
   }
 
-  // Step 5: Test approval functions (simulate only)
-  logger.info("Step 5: Testing approval functions (simulation)...");
-  
-  try {
-    // Test mock hash for approval simulation
-    const mockTxHash = Fr.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
-    
-    // Test getting approval count for non-existent transaction
-    const approvalCount = await multisig.methods
-      .get_cross_chain_approval_count(mockTxHash)
-      .simulate({ from: signerAddress });
-    logger.info(`✅ Approval count for mock tx: ${approvalCount}`);
+  const exec = multisig.methods.execute_cross_chain_tx(
+    Number(afterNonce),
+    targetChain,
+    targetContract,
+    amount,
+    recipient,
+    intentType
+  ).send({ from, fee });
+  const execRcpt = await exec.wait({ timeout: 180000 });
 
-    // Test checking if signer has approved
-    const hasApproved = await multisig.methods
-      .has_approved_cross_chain(mockTxHash, 1)
-      .simulate({ from: signerAddress });
-    logger.info(`✅ Has signer 1 approved mock tx: ${hasApproved}`);
+  const approvalCount = await multisig.methods.get_cross_chain_approval_count(proposedHash).simulate({ from });
+  const executed = await multisig.methods.is_cross_chain_executed(proposedHash).simulate({ from });
 
-    // Test execution status
-    const isExecuted = await multisig.methods
-      .is_cross_chain_executed(mockTxHash)
-      .simulate({ from: signerAddress });
-    logger.info(`✅ Is mock tx executed: ${isExecuted}`);
-
-  } catch (error) {
-    logger.error("❌ Approval function test failed:", error);
-    throw error;
-  }
-
-  // Step 6: Contract state summary
-  logger.info("Step 6: Contract state summary...");
-  
-  const summary = {
-    contractAddress: config.DEPLOYED_ADDRESS,
-    threshold: await multisig.methods.get_threshold().simulate({ from: signerAddress }),
-    crossChainNonce: await multisig.methods.get_cross_chain_nonce().simulate({ from: signerAddress }),
-    portalAddress: (await multisig.methods.get_portal_address().simulate({ from: signerAddress })).toString(),
-    wormholeEmitter: (await multisig.methods.get_wormhole_emitter().simulate({ from: signerAddress })).toString(),
-  };
-  
-  logger.info("📊 Contract State Summary:");
-  logger.info(`   Contract: ${summary.contractAddress}`);
-  logger.info(`   Threshold: ${summary.threshold}`);
-  logger.info(`   Cross-chain nonce: ${summary.crossChainNonce}`);
-  logger.info(`   Portal: ${summary.portalAddress}`);
-  logger.info(`   Wormhole: ${summary.wormholeEmitter}`);
-
-  logger.info("✅ All basic multisig tests passed!");
-
-  return {
-    success: true,
-    summary
-  };
+  console.log(JSON.stringify({
+    proposedHash: proposedHash.toString(),
+    nonceUsed: Number(afterNonce),
+    approvalCount: Number(approvalCount),
+    executed: Boolean(executed),
+    executeTxHash: execRcpt.txHash,
+  }, null, 2));
 }
 
-// Export for use in other scripts
-export { testBasicMultisig, loadConfig };
-
-// Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  testBasicMultisig()
-    .then(() => {
-      console.log("🎉 Basic multisig test completed successfully!");
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("❌ Basic multisig test failed:", error);
-      process.exit(1);
-    });
+  main().catch(e => { console.error(e); process.exit(1); });
 }
