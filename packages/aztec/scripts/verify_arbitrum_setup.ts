@@ -8,12 +8,12 @@ dotenv.config();
 interface ArbitrumConfig {
   PRIVATE_KEY: string;
   ARBITRUM_RPC: string;
-  ARBITRUM_VAULT_ADDRESS: string;
+  ARBITRUM_INTENT_VAULT: string;
   ARBITRUM_DONATION_ADDRESS?: string;
 }
 
 function loadArbitrumConfig(): ArbitrumConfig {
-  const required = ["PRIVATE_KEY", "ARBITRUM_RPC", "ARBITRUM_VAULT_ADDRESS"];
+  const required = ["PRIVATE_KEY", "ARBITRUM_RPC", "ARBITRUM_INTENT_VAULT"];
 
   const config: any = {};
 
@@ -26,7 +26,6 @@ function loadArbitrumConfig(): ArbitrumConfig {
     config[key] = process.env[key];
   }
 
-  // Optional - không bắt buộc
   config.ARBITRUM_DONATION_ADDRESS = process.env.ARBITRUM_DONATION_ADDRESS;
 
   return config as ArbitrumConfig;
@@ -42,7 +41,7 @@ async function verifyArbitrumSetup() {
     `✅ Private key loaded: ${config.PRIVATE_KEY.substring(0, 10)}...`
   );
   console.log(`✅ Arbitrum RPC: ${config.ARBITRUM_RPC}`);
-  console.log(`✅ Vault address: ${config.ARBITRUM_VAULT_ADDRESS}`);
+  console.log(`✅ Vault address: ${config.ARBITRUM_INTENT_VAULT}`);
   if (config.ARBITRUM_DONATION_ADDRESS) {
     console.log(`✅ Donation address: ${config.ARBITRUM_DONATION_ADDRESS}`);
   }
@@ -93,7 +92,7 @@ async function verifyArbitrumSetup() {
     "function verifyAndProcessIntent(bytes memory encodedVm) external",
   ];
   const vault = new ethers.Contract(
-    config.ARBITRUM_VAULT_ADDRESS,
+    config.ARBITRUM_INTENT_VAULT,
     vaultAbi,
     wallet
   );
@@ -102,11 +101,11 @@ async function verifyArbitrumSetup() {
 
   try {
     // Check if contract exists
-    const code = await provider.getCode(config.ARBITRUM_VAULT_ADDRESS);
+    const code = await provider.getCode(config.ARBITRUM_INTENT_VAULT);
     if (code === "0x") {
       throw new Error("Vault contract not deployed at specified address");
     }
-    console.log(`✅ Vault contract exists at ${config.ARBITRUM_VAULT_ADDRESS}`);
+    console.log(`✅ Vault contract exists at ${config.ARBITRUM_INTENT_VAULT}`);
 
     // Check owner
 
@@ -214,7 +213,7 @@ async function verifyArbitrumSetup() {
   console.log(`Network: Arbitrum Sepolia (${network.chainId})`);
   console.log(`Wallet: ${wallet.address}`);
   console.log(`Balance: ${balanceEth} ETH`);
-  console.log(`Vault Contract: ${config.ARBITRUM_VAULT_ADDRESS}`);
+  console.log(`Vault Contract: ${config.ARBITRUM_INTENT_VAULT}`);
   console.log(`Vault Owner: ${await vault.owner()}`);
   console.log(`Can Register: ${isOwner ? "Yes" : "No"}`);
   console.log(`Aztec Contract: ${aztecContractAddress || "Not loaded"}`);
@@ -238,7 +237,7 @@ async function verifyArbitrumSetup() {
       network: network.chainId.toString(),
       wallet: wallet.address,
       balance: balanceEth,
-      vaultAddress: config.ARBITRUM_VAULT_ADDRESS,
+      vaultAddress: config.ARBITRUM_INTENT_VAULT,
       aztecAddress: aztecContractAddress,
     },
   };

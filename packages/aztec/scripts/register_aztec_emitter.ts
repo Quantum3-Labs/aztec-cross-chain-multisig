@@ -14,7 +14,7 @@ async function registerAztecEmitter() {
   console.log("Step 3.1: Loading configurations...");
 
   // Load Arbitrum config
-  const requiredEnv = ["PRIVATE_KEY", "ARBITRUM_RPC", "ARBITRUM_VAULT_ADDRESS"];
+  const requiredEnv = ["PRIVATE_KEY", "ARBITRUM_RPC", "ARBITRUM_INTENT_VAULT"];
   for (const key of requiredEnv) {
     if (!process.env[key]) {
       throw new Error(`Missing required environment variable: ${key}`);
@@ -39,7 +39,7 @@ async function registerAztecEmitter() {
   }
 
   console.log(`✅ Arbitrum RPC: ${process.env.ARBITRUM_RPC}`);
-  console.log(`✅ Vault address: ${process.env.ARBITRUM_VAULT_ADDRESS}`);
+  console.log(`✅ Vault address: ${process.env.ARBITRUM_INTENT_VAULT}`);
   console.log(`✅ Aztec contract: ${aztecAddress}`);
 
   // Step 3.2: Setup connection
@@ -61,7 +61,7 @@ async function registerAztecEmitter() {
   ];
 
   const vault = new ethers.Contract(
-    process.env.ARBITRUM_VAULT_ADDRESS!,
+    process.env.ARBITRUM_INTENT_VAULT!,
     vaultAbi,
     wallet
   );
@@ -171,7 +171,7 @@ async function registerAztecEmitter() {
   console.log(
     `Registration Success: ${finalVerification ? "✅ YES" : "❌ NO"}`
   );
-  console.log(`Vault Contract: ${process.env.ARBITRUM_VAULT_ADDRESS}`);
+  console.log(`Vault Contract: ${process.env.ARBITRUM_INTENT_VAULT}`);
   console.log(`Transaction Hash: ${tx?.hash || "N/A"}`);
   console.log("=".repeat(50));
 
