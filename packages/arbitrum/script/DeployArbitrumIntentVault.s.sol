@@ -6,18 +6,30 @@ import "../src/ArbitrumIntentVault.sol";
 
 contract DeployArbitrumIntentVault is Script {
     function run() external {
-        vm.startBroadcast();
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        address wormholeAddress = vm.envAddress("WORMHOLE_ADDRESS");
+        uint16 aztecChainId = uint16(vm.envUint("AZTEC_CHAIN_ID"));
+        address donationAddress = vm.envAddress("DONATION_ADDRESS");
+        
+        console.log("=== Deploying ArbitrumIntentVault ===");
+        console.log("Deployer:", vm.addr(deployerPrivateKey));
+        console.log("Wormhole:", wormholeAddress);
+        console.log("Aztec Chain ID:", aztecChainId);
+        console.log("Donation:", donationAddress);
+        console.log("");
+
+        vm.startBroadcast(deployerPrivateKey);
 
         ArbitrumIntentVault vault = new ArbitrumIntentVault(
-            payable(0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35), // Wormhole on Arbitrum Sepolia 
-            56,                                                    // Aztec chainId in Wormhole (not 23!)
-            421614,                                               // Arbitrum Sepolia EVM chainId
-            1,                                                    // finality
-            0x781a68C3149d13D05a5F0C9E22C9D321d6f620E1           // donation contract (already deployed)
+            payable(wormholeAddress),
+            aztecChainId,
+            421614,  // Arbitrum Sepolia
+            1,       // finality
+            donationAddress
         );
 
-        console.log("ArbitrumIntentVault deployed at:", address(vault));
-
         vm.stopBroadcast();
+
+        console.log("ArbitrumIntentVault deployed at:", address(vault));
     }
 }

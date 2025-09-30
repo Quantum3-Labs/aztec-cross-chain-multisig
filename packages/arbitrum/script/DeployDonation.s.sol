@@ -6,8 +6,22 @@ import "../src/Donation.sol";
 
 contract DeployDonation is Script {
     function run() external {
-        vm.startBroadcast();
-        new Donation(0x2dA2d9CCC37dA7A4103C67247D51b48FfcBe2296);
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        address donationReceiver = vm.envAddress("DONATION_RECEIVER");
+        
+        console.log("=== Deploying Donation Contract ===");
+        console.log("Deployer:", vm.addr(deployerPrivateKey));
+        console.log("Receiver:", donationReceiver);
+        console.log("");
+        
+        vm.startBroadcast(deployerPrivateKey);
+        
+        Donation donation = new Donation(donationReceiver);
+        
         vm.stopBroadcast();
+        
+        console.log("Donation deployed at:", address(donation));
+        console.log("Token Name: ProverToken");
+        console.log("Token Symbol: PTZK");
     }
 }
