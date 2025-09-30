@@ -1,24 +1,22 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
-import { AztecAddress, Fr, EthAddress, createLogger } from "@aztec/aztec.js";
+import { AztecAddress, Fr, createLogger } from "@aztec/aztec.js";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee/testing";
 import { getSchnorrAccount } from "@aztec/accounts/schnorr";
 import { GrumpkinScalar } from "@aztec/foundation/fields";
 import { Grumpkin } from "@aztec/foundation/crypto";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
-import { MultiSchnorrPortalAccountContract } from "../src/artifacts/MultiSchnorrPortalAccount.js";
+import { PrivateMultisigContract } from "../src/artifacts/PrivateMultisig.js";
 import { setupPXE } from "../src/utils/setup_pxe.js";
 import { getSponsoredFPCInstance } from "../src/utils/sponsored_fpc.js";
 
-const toBig = (hex: string) => BigInt(hex);
-const toFr = (hex: string) => Fr.fromString(toBig(hex).toString());
-const toScalar = (hex: string) => GrumpkinScalar.fromString(toBig(hex).toString());
-const parseEth = (s: string) => EthAddress.fromString("0x" + s.replace(/^0x/i, "").toLowerCase());
+const toFr = (hex: string) => Fr.fromString(BigInt(hex).toString());
+const toScalar = (hex: string) => GrumpkinScalar.fromString(BigInt(hex).toString());
 const maybeFr = (k: string) => (process.env[k] ? toFr(process.env[k] as string) : undefined);
 
 async function main() {
-  const logger = createLogger("crosschain-multisig");
+  const logger = createLogger("deploy-private-multisig");
   const pxe = await setupPXE();
   const sponsoredFPC = await getSponsoredFPCInstance();
   await pxe.registerContract({ instance: sponsoredFPC, artifact: SponsoredFPCContract.artifact });
@@ -26,44 +24,32 @@ async function main() {
 
   const secretKey = toFr(process.env.SECRET_KEY!);
   const salt = toFr(process.env.SALT!);
-  const priv1 = toScalar(process.env.PRIV1!);
-  const priv2 = toScalar(process.env.PRIV2!);
-  const priv3 = toScalar(process.env.PRIV3!);
+  const priv = toScalar(process.env.PRIV1!);
 
   const grumpkin = new Grumpkin();
-  const gen = grumpkin.generator();
-  const dpub1 = await grumpkin.mul(gen, priv1);
-  const dpub2 = await grumpkin.mul(gen, priv2);
-  const dpub3 = await grumpkin.mul(gen, priv3);
+  const pub = await grumpkin.mul(grumpkin.generator(), priv);
+  const pubX = maybeFr("PUB1_X") ?? pub.x;
+  const pubY = maybeFr("PUB1_Y") ?? pub.y;
 
-  const pub1x = maybeFr("PUB1_X") ?? dpub1.x;
-  const pub1y = maybeFr("PUB1_Y") ?? dpub1.y;
-  const pub2x = maybeFr("PUB2_X") ?? dpub2.x;
-  const pub2y = maybeFr("PUB2_Y") ?? dpub2.y;
-  const pub3x = maybeFr("PUB3_X") ?? dpub3.x;
-  const pub3y = maybeFr("PUB3_Y") ?? dpub3.y;
+  const threshold = Number(process.env.THRESHOLD ?? "1");
 
-  const portal = parseEth(process.env.PORTAL!);
-  const emitter = parseEth(process.env.L1_EMITTER!);
-  const threshold = Number(process.env.THRESHOLD ?? "2");
-
-  const acctMgr = await getSchnorrAccount(pxe, secretKey, priv1, salt);
+  logger.info("Deploying and registering owner account...");
+  const acctMgr = await getSchnorrAccount(pxe, secretKey, priv, salt);
+  
+  // Deploy account contract
   await (await acctMgr.deploy({ fee })).wait({ timeout: 180000 });
+  
+  // Register account with PXE - THIS IS CRITICAL
+  await acctMgr.register();
+  
   const ownerWallet = await acctMgr.getWallet();
   const owner: AztecAddress = ownerWallet.getAddress();
+  
+  logger.info(`Owner account deployed: ${owner.toString()}`);
 
-  const dm = MultiSchnorrPortalAccountContract.deploy(
-    ownerWallet,
-    pub1x, pub1y,
-    pub2x, pub2y,
-    pub3x, pub3y,
-    threshold,
-    portal,
-    emitter
-  );
-  const sent = dm.send({ from: owner, fee });
-  const receipt = await sent.wait({ timeout: 180000 });
-
+  logger.info("Deploying multisig contract...");
+  const tx = PrivateMultisigContract.deploy(ownerWallet, owner, pubX, pubY, threshold).send({ from: owner, fee });
+  const receipt = await tx.wait({ timeout: 180000 });
   const deployed = receipt.contract.address as AztecAddress;
 
   const envFile = process.env.ENV_PATH || path.resolve(process.cwd(), ".env");
@@ -77,13 +63,16 @@ async function main() {
     if (map[k] !== undefined) lines[map[k]] = `${k}=${v}`;
     else lines.push(`${k}=${v}`);
   };
-  set("MULTISIG_ADDRESS", deployed.toString());
+  set("PRIVATE_MULTISIG_ADDRESS", deployed.toString());
   set("DEPLOY_TX_HASH", receipt.txHash.toString());
   set("DEPLOY_TIMESTAMP", new Date().toISOString());
   fs.writeFileSync(envFile, lines.join("\n"));
 
-  console.log("DEPLOYED_ADDRESS=", deployed.toString());
-  console.log("DEPLOY_TX_HASH=", receipt.txHash);
+  logger.info(`DEPLOYED_ADDRESS=${deployed.toString()}`);
+  logger.info(`DEPLOY_TX_HASH=${receipt.txHash}`);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

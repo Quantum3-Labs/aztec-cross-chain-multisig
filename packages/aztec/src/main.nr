@@ -1,7 +1,7 @@
 use dep::aztec::macros::aztec;
 
 #[aztec]
-pub contract PrivateMultisigContract {
+pub contract PrivateMultisig {
     use dep::aztec::{
         authwit::{account::AccountActions, entrypoint::{app::AppPayload, fee::FeePayload}},
         context::PrivateContext,
@@ -14,12 +14,11 @@ pub contract PrivateMultisigContract {
             abis::function_selector::FunctionSelector,
             address::AztecAddress,
             hash::poseidon2_hash,
-            traits::{FromField, Hash, ToField},
+            traits::{ToField, FromField},
         },
         state_vars::{Map, PublicMutable},
     };
 
-    // Transaction intent structure (only map intent, no execution on Aztec)
     struct TransactionIntent {
         to: AztecAddress,
         amount: u128,
@@ -29,7 +28,7 @@ pub contract PrivateMultisigContract {
         deadline: u64,
     }
 
-    impl Hash for TransactionIntent {
+    impl TransactionIntent {
         fn hash(self) -> Field {
             poseidon2_hash([
                 self.to.to_field(),
@@ -42,9 +41,8 @@ pub contract PrivateMultisigContract {
         }
     }
 
-    // Management operation types
     struct ManagementIntent {
-        operation_type: Field, // 1=add_signer, 2=remove_signer, 3=change_threshold
+        operation_type: Field,
         target_address: AztecAddress,
         pubkey_x: Field,
         pubkey_y: Field,
@@ -53,7 +51,7 @@ pub contract PrivateMultisigContract {
         deadline: u64,
     }
 
-    impl Hash for ManagementIntent {
+    impl ManagementIntent {
         fn hash(self) -> Field {
             poseidon2_hash([
                 self.operation_type,
@@ -70,19 +68,17 @@ pub contract PrivateMultisigContract {
     #[storage]
     struct Storage<Context> {
         message_approval_counts: Map<Field, PublicMutable<Field, Context>, Context>,
-        authorized_signers: Map<AztecAddress, PublicMutable<Field, Context>, Context>,
+        management_approval_counts: Map<Field, PublicMutable<Field, Context>, Context>,
         threshold: PublicMutable<Field, Context>,
         signer_count: PublicMutable<Field, Context>,
         transaction_nonce: PublicMutable<Field, Context>,
         executed_messages: Map<Field, PublicMutable<Field, Context>, Context>,
+        executed_management_operations: Map<Field, PublicMutable<Field, Context>, Context>,
         signer_pubkeys_x: Map<AztecAddress, PublicMutable<Field, Context>, Context>,
         signer_pubkeys_y: Map<AztecAddress, PublicMutable<Field, Context>, Context>,
         signer_nonces: Map<AztecAddress, PublicMutable<Field, Context>, Context>,
         message_signer_approvals: Map<Field, Map<AztecAddress, PublicMutable<Field, Context>, Context>, Context>,
-        management_approval_counts: Map<Field, PublicMutable<Field, Context>, Context>,
         management_signer_approvals: Map<Field, Map<AztecAddress, PublicMutable<Field, Context>, Context>, Context>,
-        executed_management_operations: Map<Field, PublicMutable<Field, Context>, Context>,
-        temp_execution_result: PublicMutable<Field, Context>,
     }
 
     #[initializer]
@@ -100,13 +96,10 @@ pub contract PrivateMultisigContract {
         storage.signer_count.write(1);
         storage.transaction_nonce.write(0);
 
-        storage.authorized_signers.at(initial_signer).write(1);
         storage.signer_pubkeys_x.at(initial_signer).write(initial_signer_pk_x);
         storage.signer_pubkeys_y.at(initial_signer).write(initial_signer_pk_y);
         storage.signer_nonces.at(initial_signer).write(0);
     }
-
-    // ========== ACCOUNT INTERFACE ==========
 
     #[private]
     #[noinitcheck]
@@ -124,7 +117,6 @@ pub contract PrivateMultisigContract {
 
     #[contract_library_method]
     fn is_valid_impl(_context: &mut PrivateContext, outer_hash: Field) -> bool {
-        // Safety: get_auth_witness is safe to use for signature verification
         let witness: [Field; 64] = unsafe { get_auth_witness(outer_hash) };
 
         let mut signature: [u8; 64] = [0; 64];
@@ -134,8 +126,6 @@ pub contract PrivateMultisigContract {
 
         _validate_signature_format(signature, outer_hash)
     }
-
-    // ========== SIGNATURE VERIFICATION ==========
 
     #[contract_library_method]
     fn _validate_signature_format(signature: [u8; 64], message_hash: Field) -> bool {
@@ -162,16 +152,15 @@ pub contract PrivateMultisigContract {
         pubkey_x: Field,
         pubkey_y: Field,
     ) -> bool {
-        let pub_key = std::embedded_curve_ops::EmbeddedCurvePoint {
+        let pub_key = dep::std::embedded_curve_ops::EmbeddedCurvePoint {
             x: pubkey_x,
             y: pubkey_y,
             is_infinite: false,
         };
-        schnorr::verify_signature(pub_key, signature, message_hash.to_be_bytes::<32>())
+        dep::schnorr::verify_signature(pub_key, signature, message_hash.to_be_bytes::<32>())
     }
 
-    // ========== 1. ADD SIGNER - PRIVATE ==========
-
+    // ADD SIGNER - PRIVATE
     #[private]
     fn add_signer(
         new_signer: AztecAddress,
@@ -191,7 +180,7 @@ pub contract PrivateMultisigContract {
         let caller = context.msg_sender();
 
         let management_intent = ManagementIntent {
-            operation_type: 1, // add_signer
+            operation_type: 1,
             target_address: new_signer,
             pubkey_x: new_signer_pk_x,
             pubkey_y: new_signer_pk_y,
@@ -226,32 +215,32 @@ pub contract PrivateMultisigContract {
         new_signer_pk_x: Field,
         new_signer_pk_y: Field,
         signer_nonce: u32,
-        expected_pk_x: Field,
-        expected_pk_y: Field,
+        provided_pk_x: Field,
+        provided_pk_y: Field,
     ) {
         let caller_addr = AztecAddress::from_field(caller);
         let new_signer_addr = AztecAddress::from_field(new_signer);
 
-        assert(storage.authorized_signers.at(caller_addr).read() == 1, "Not authorized signer");
-        assert(storage.signer_nonces.at(caller_addr).read() as u32 == signer_nonce, "Invalid nonce");
-        assert(storage.authorized_signers.at(new_signer_addr).read() == 0, "Signer already exists");
-        assert(storage.executed_management_operations.at(message_hash).read() == 0, "Already executed");
-
-        // Verify the provided public key matches stored public key
+        // Verify provided public key matches stored public key
         let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
         let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
-        assert(stored_pk_x == expected_pk_x, "Public key mismatch");
-        assert(stored_pk_y == expected_pk_y, "Public key mismatch");
+        assert(stored_pk_x == provided_pk_x, "Public key mismatch");
+        assert(stored_pk_y == provided_pk_y, "Public key mismatch");
+        assert(stored_pk_x != 0, "Caller is not a signer");
 
-        storage.management_approval_counts.at(message_hash).write(1);
+        assert(storage.signer_nonces.at(caller_addr).read() as u32 == signer_nonce, "Invalid nonce");
+        assert(storage.executed_management_operations.at(message_hash).read() == 0, "Already executed");
+
+        let current_approvals = storage.management_approval_counts.at(message_hash).read();
+        storage.management_approval_counts.at(message_hash).write(current_approvals + 1);
         storage.management_signer_approvals.at(message_hash).at(caller_addr).write(1);
 
         let current_threshold = storage.threshold.read();
-        if (1 as u32) >= (current_threshold as u32) {
-            // Execute add signer
+        
+        // Auto-execute when threshold reached
+        if ((current_approvals + 1) as u32) >= (current_threshold as u32) {
             let current_count = storage.signer_count.read();
             storage.signer_count.write(current_count + 1);
-            storage.authorized_signers.at(new_signer_addr).write(1);
             storage.signer_pubkeys_x.at(new_signer_addr).write(new_signer_pk_x);
             storage.signer_pubkeys_y.at(new_signer_addr).write(new_signer_pk_y);
             storage.signer_nonces.at(new_signer_addr).write(0);
@@ -261,8 +250,7 @@ pub contract PrivateMultisigContract {
         storage.signer_nonces.at(caller_addr).write((signer_nonce + 1) as Field);
     }
 
-    // ========== 2. REMOVE SIGNER - PRIVATE ==========
-
+    // REMOVE SIGNER - PRIVATE
     #[private]
     fn remove_signer(
         target_signer: AztecAddress,
@@ -280,7 +268,7 @@ pub contract PrivateMultisigContract {
         assert(caller != target_signer, "Cannot remove yourself");
 
         let management_intent = ManagementIntent {
-            operation_type: 2, // remove_signer
+            operation_type: 2,
             target_address: target_signer,
             pubkey_x: 0,
             pubkey_y: 0,
@@ -313,40 +301,39 @@ pub contract PrivateMultisigContract {
         caller: Field,
         target_signer: Field,
         signer_nonce: u32,
-        expected_pk_x: Field,
-        expected_pk_y: Field,
+        provided_pk_x: Field,
+        provided_pk_y: Field,
     ) {
         let caller_addr = AztecAddress::from_field(caller);
         let target_addr = AztecAddress::from_field(target_signer);
 
-        assert(storage.authorized_signers.at(caller_addr).read() == 1, "Not authorized signer");
+        // Verify provided public key matches stored public key
+        let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
+        let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
+        assert(stored_pk_x == provided_pk_x, "Public key mismatch");
+        assert(stored_pk_y == provided_pk_y, "Public key mismatch");
+        assert(stored_pk_x != 0, "Caller is not a signer");
+
         assert(storage.signer_nonces.at(caller_addr).read() as u32 == signer_nonce, "Invalid nonce");
-        assert(storage.authorized_signers.at(target_addr).read() == 1, "Target is not a signer");
         assert(storage.executed_management_operations.at(message_hash).read() == 0, "Already executed");
 
         let current_count = storage.signer_count.read();
         assert((current_count as u32) > 1, "Cannot remove last signer");
 
-        // Verify the provided public key matches stored public key
-        let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
-        let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
-        assert(stored_pk_x == expected_pk_x, "Public key mismatch");
-        assert(stored_pk_y == expected_pk_y, "Public key mismatch");
-
-        storage.management_approval_counts.at(message_hash).write(1);
+        let current_approvals = storage.management_approval_counts.at(message_hash).read();
+        storage.management_approval_counts.at(message_hash).write(current_approvals + 1);
         storage.management_signer_approvals.at(message_hash).at(caller_addr).write(1);
 
         let current_threshold = storage.threshold.read();
-        if (1 as u32) >= (current_threshold as u32) {
-            // Execute remove signer
+        
+        // Auto-execute when threshold reached
+        if ((current_approvals + 1) as u32) >= (current_threshold as u32) {
             storage.signer_count.write(current_count - 1);
-            storage.authorized_signers.at(target_addr).write(0);
             storage.signer_pubkeys_x.at(target_addr).write(0);
             storage.signer_pubkeys_y.at(target_addr).write(0);
             storage.signer_nonces.at(target_addr).write(0);
             storage.executed_management_operations.at(message_hash).write(1);
 
-            // Adjust threshold if needed
             let new_count = current_count - 1;
             if (current_threshold as u32) > (new_count as u32) {
                 storage.threshold.write(new_count);
@@ -356,8 +343,7 @@ pub contract PrivateMultisigContract {
         storage.signer_nonces.at(caller_addr).write((signer_nonce + 1) as Field);
     }
 
-    // ========== 3. CHANGE THRESHOLD - PRIVATE ==========
-
+    // CHANGE THRESHOLD - PRIVATE
     #[private]
     fn change_threshold(
         new_threshold: u8,
@@ -374,7 +360,7 @@ pub contract PrivateMultisigContract {
         let caller = context.msg_sender();
 
         let management_intent = ManagementIntent {
-            operation_type: 3, // change_threshold
+            operation_type: 3,
             target_address: AztecAddress::zero(),
             pubkey_x: 0,
             pubkey_y: 0,
@@ -407,30 +393,32 @@ pub contract PrivateMultisigContract {
         caller: Field,
         new_threshold: u8,
         signer_nonce: u32,
-        expected_pk_x: Field,
-        expected_pk_y: Field,
+        provided_pk_x: Field,
+        provided_pk_y: Field,
     ) {
         let caller_addr = AztecAddress::from_field(caller);
 
-        assert(storage.authorized_signers.at(caller_addr).read() == 1, "Not authorized signer");
+        // Verify provided public key matches stored public key
+        let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
+        let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
+        assert(stored_pk_x == provided_pk_x, "Public key mismatch");
+        assert(stored_pk_y == provided_pk_y, "Public key mismatch");
+        assert(stored_pk_x != 0, "Caller is not a signer");
+
         assert(storage.signer_nonces.at(caller_addr).read() as u32 == signer_nonce, "Invalid nonce");
         assert(storage.executed_management_operations.at(message_hash).read() == 0, "Already executed");
 
         let current_count = storage.signer_count.read();
         assert((new_threshold as u32) <= (current_count as u32), "Threshold cannot exceed signer count");
 
-        // Verify the provided public key matches stored public key
-        let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
-        let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
-        assert(stored_pk_x == expected_pk_x, "Public key mismatch");
-        assert(stored_pk_y == expected_pk_y, "Public key mismatch");
-
-        storage.management_approval_counts.at(message_hash).write(1);
+        let current_approvals = storage.management_approval_counts.at(message_hash).read();
+        storage.management_approval_counts.at(message_hash).write(current_approvals + 1);
         storage.management_signer_approvals.at(message_hash).at(caller_addr).write(1);
 
         let current_threshold = storage.threshold.read();
-        if (1 as u32) >= (current_threshold as u32) {
-            // Execute threshold change
+        
+        // Auto-execute when threshold reached
+        if ((current_approvals + 1) as u32) >= (current_threshold as u32) {
             storage.threshold.write(new_threshold as Field);
             storage.executed_management_operations.at(message_hash).write(1);
         }
@@ -438,8 +426,7 @@ pub contract PrivateMultisigContract {
         storage.signer_nonces.at(caller_addr).write((signer_nonce + 1) as Field);
     }
 
-    // ========== 4. PROPOSE TRANSACTION - PRIVATE (Intent Only) ==========
-
+    // PROPOSE TRANSACTION - PRIVATE (Intent mapping only)
     #[private]
     fn propose_transaction(
         to: AztecAddress,
@@ -491,30 +478,29 @@ pub contract PrivateMultisigContract {
         message_hash: Field,
         caller: Field,
         signer_nonce: u32,
-        expected_pk_x: Field,
-        expected_pk_y: Field,
+        provided_pk_x: Field,
+        provided_pk_y: Field,
     ) {
         let caller_addr = AztecAddress::from_field(caller);
 
-        assert(storage.authorized_signers.at(caller_addr).read() == 1, "Not authorized signer");
-        assert(storage.signer_nonces.at(caller_addr).read() as u32 == signer_nonce, "Invalid nonce");
-        assert(storage.executed_messages.at(message_hash).read() == 0, "Message already executed");
-
-        // Verify the provided public key matches stored public key
+        // Verify provided public key matches stored public key
         let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
         let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
-        assert(stored_pk_x == expected_pk_x, "Public key mismatch");
-        assert(stored_pk_y == expected_pk_y, "Public key mismatch");
+        assert(stored_pk_x == provided_pk_x, "Public key mismatch");
+        assert(stored_pk_y == provided_pk_y, "Public key mismatch");
+        assert(stored_pk_x != 0, "Caller is not a signer");
+
+        assert(storage.signer_nonces.at(caller_addr).read() as u32 == signer_nonce, "Invalid nonce");
+        assert(storage.executed_messages.at(message_hash).read() == 0, "Message already executed");
 
         storage.message_approval_counts.at(message_hash).write(1);
         storage.message_signer_approvals.at(message_hash).at(caller_addr).write(1);
 
         let current_threshold = storage.threshold.read();
+        
+        // Auto-execute when threshold reached (mark as approved)
         if (1 as u32) >= (current_threshold as u32) {
             storage.executed_messages.at(message_hash).write(1);
-            storage.temp_execution_result.write(1);
-        } else {
-            storage.temp_execution_result.write(0);
         }
 
         let current_tx_nonce = storage.transaction_nonce.read();
@@ -522,8 +508,7 @@ pub contract PrivateMultisigContract {
         storage.signer_nonces.at(caller_addr).write((signer_nonce + 1) as Field);
     }
 
-    // ========== 5. APPROVE TRANSACTION - PRIVATE (Auto Execute) ==========
-
+    // APPROVE TRANSACTION - PRIVATE (Auto-execute when threshold reached)
     #[private]
     fn approve_transaction(
         message_hash: Field,
@@ -556,12 +541,18 @@ pub contract PrivateMultisigContract {
         message_hash: Field,
         caller: Field,
         signer_nonce: u32,
-        expected_pk_x: Field,
-        expected_pk_y: Field,
+        provided_pk_x: Field,
+        provided_pk_y: Field,
     ) {
         let caller_addr = AztecAddress::from_field(caller);
 
-        assert(storage.authorized_signers.at(caller_addr).read() == 1, "Not authorized signer");
+        // Verify provided public key matches stored public key
+        let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
+        let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
+        assert(stored_pk_x == provided_pk_x, "Public key mismatch");
+        assert(stored_pk_y == provided_pk_y, "Public key mismatch");
+        assert(stored_pk_x != 0, "Caller is not a signer");
+
         assert(storage.signer_nonces.at(caller_addr).read() as u32 == signer_nonce, "Invalid nonce");
         assert(storage.executed_messages.at(message_hash).read() == 0, "Already executed");
         assert(
@@ -569,31 +560,21 @@ pub contract PrivateMultisigContract {
             "Already approved by this signer",
         );
 
-        // Verify the provided public key matches stored public key
-        let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
-        let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
-        assert(stored_pk_x == expected_pk_x, "Public key mismatch");
-        assert(stored_pk_y == expected_pk_y, "Public key mismatch");
-
         let current_approvals = storage.message_approval_counts.at(message_hash).read();
         storage.message_approval_counts.at(message_hash).write(current_approvals + 1);
         storage.message_signer_approvals.at(message_hash).at(caller_addr).write(1);
 
         let current_threshold = storage.threshold.read();
-        let should_execute = ((current_approvals + 1) as u32) >= (current_threshold as u32);
-
-        if should_execute {
+        
+        // Auto-execute when threshold reached
+        if ((current_approvals + 1) as u32) >= (current_threshold as u32) {
             storage.executed_messages.at(message_hash).write(1);
-            storage.temp_execution_result.write(1);
-        } else {
-            storage.temp_execution_result.write(0);
         }
 
         storage.signer_nonces.at(caller_addr).write((signer_nonce + 1) as Field);
     }
 
-    // ========== APPROVE MANAGEMENT OPERATIONS ==========
-
+    // Management operation approval - PRIVATE
     #[private]
     fn approve_management_operation(
         message_hash: Field,
@@ -626,12 +607,18 @@ pub contract PrivateMultisigContract {
         message_hash: Field,
         caller: Field,
         signer_nonce: u32,
-        expected_pk_x: Field,
-        expected_pk_y: Field,
+        provided_pk_x: Field,
+        provided_pk_y: Field,
     ) {
         let caller_addr = AztecAddress::from_field(caller);
 
-        assert(storage.authorized_signers.at(caller_addr).read() == 1, "Not authorized signer");
+        // Verify provided public key matches stored public key
+        let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
+        let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
+        assert(stored_pk_x == provided_pk_x, "Public key mismatch");
+        assert(stored_pk_y == provided_pk_y, "Public key mismatch");
+        assert(stored_pk_x != 0, "Caller is not a signer");
+
         assert(storage.signer_nonces.at(caller_addr).read() as u32 == signer_nonce, "Invalid nonce");
         assert(storage.executed_management_operations.at(message_hash).read() == 0, "Already executed");
         assert(
@@ -639,35 +626,23 @@ pub contract PrivateMultisigContract {
             "Already approved by this signer",
         );
 
-        // Verify the provided public key matches stored public key
-        let stored_pk_x = storage.signer_pubkeys_x.at(caller_addr).read();
-        let stored_pk_y = storage.signer_pubkeys_y.at(caller_addr).read();
-        assert(stored_pk_x == expected_pk_x, "Public key mismatch");
-        assert(stored_pk_y == expected_pk_y, "Public key mismatch");
-
         let current_approvals = storage.management_approval_counts.at(message_hash).read();
         storage.management_approval_counts.at(message_hash).write(current_approvals + 1);
         storage.management_signer_approvals.at(message_hash).at(caller_addr).write(1);
 
         let current_threshold = storage.threshold.read();
-        let should_execute = ((current_approvals + 1) as u32) >= (current_threshold as u32);
-
-        if should_execute {
-            storage.executed_management_operations.at(message_hash).write(1);
-            storage.temp_execution_result.write(1);
-        } else {
-            storage.temp_execution_result.write(0);
-        }
+        
+        // NOTE: Management operations are executed in their specific internal functions
+        // This just tracks approvals for operations that need separate approval flow
 
         storage.signer_nonces.at(caller_addr).write((signer_nonce + 1) as Field);
     }
 
-    // ========== UTILITY FUNCTIONS ==========
-
+    // VIEW FUNCTIONS
     #[public]
     fn get_signer_info(signer: AztecAddress) -> (bool, Field, Field, Field) {
-        let is_authorized = storage.authorized_signers.at(signer).read() == 1;
         let pubkey_x = storage.signer_pubkeys_x.at(signer).read();
+        let is_authorized = pubkey_x != 0;
         let pubkey_y = storage.signer_pubkeys_y.at(signer).read();
         let nonce = storage.signer_nonces.at(signer).read();
 
@@ -685,7 +660,7 @@ pub contract PrivateMultisigContract {
 
     #[public]
     fn is_signer(address: AztecAddress) -> bool {
-        storage.authorized_signers.at(address).read() == 1
+        storage.signer_pubkeys_x.at(address).read() != 0
     }
 
     #[public]
@@ -757,10 +732,5 @@ pub contract PrivateMultisigContract {
         let approval_count = storage.management_approval_counts.at(message_hash).read();
         let threshold = storage.threshold.read();
         (approval_count as u32) >= (threshold as u32)
-    }
-
-    #[public]
-    fn get_temp_execution_result() -> Field {
-        storage.temp_execution_result.read()
     }
 }
