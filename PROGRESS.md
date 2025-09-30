@@ -235,7 +235,6 @@ yarn aztec:test-cross-chain
 ### Environment Files Required
 
 #### Aztec Side
-- **No .env needed** - Uses Aztec Sandbox defaults
 - **Keypairs**: Generated automatically in `store/pxe/`
 
 #### Arbitrum Side
