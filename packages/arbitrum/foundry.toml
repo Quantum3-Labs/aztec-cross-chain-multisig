@@ -4,11 +4,8 @@ out = "out"
 libs = ["lib"]
 remappings = [
     "wormhole/=lib/wormhole-solidity-sdk/",
-     "@openzeppelin/=lib/openzeppelin-contracts/"
+    "@openzeppelin/=lib/openzeppelin-contracts/"
 ]
-optimizer = true
-optimizer_runs = 800
-via_ir = true
-evm_version = "paris"
+
 [rpc_endpoints]
 arbitrum_sepolia = "https://sepolia-rollup.arbitrum.io/rpc"

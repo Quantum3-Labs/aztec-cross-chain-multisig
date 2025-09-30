@@ -1,92 +1,183 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "wormhole/src/testing/helpers/BytesLib.sol";
+import "./VaultGetters.sol";
 
-interface IDonation {
-    function donate(uint256 amount) external;
-}
+contract ArbitrumIntentVault is VaultGetters {
+    using BytesLib for bytes;
 
-library AddressAliasHelper {
-    uint160 constant OFFSET = uint160(0x1111000000000000000000000000000000001111);
-    function applyL1ToL2Alias(address l1Address) internal pure returns (address) {
-        return address(uint160(l1Address) + OFFSET);
+    enum IntentType {
+        TRANSFER,
+        SWAP,
+        BRIDGE,
+        MULTISIG_EXECUTE,
+        CUSTOM
     }
-}
-
-contract ArbitrumIntentVault is Ownable {
-    enum IntentType { TRANSFER, SWAP, BRIDGE, MULTISIG_EXECUTE, CUSTOM }
-
-    address public immutable l1Portal;
-    IDonation public donationContract;
 
     mapping(bytes32 => uint256) public intentAmounts;
     mapping(bytes32 => IntentType) public intentTypes;
     mapping(bytes32 => address) public intentTargets;
-    mapping(bytes32 => bool) public processed;
 
-    event IntentProcessed(bytes32 indexed txId, IntentType intentType, address target, uint256 amount);
-    event IntentExecuted(bytes32 indexed txId, IntentType intentType, bool success);
+    event IntentProcessed(
+        bytes32 indexed txId,
+        IntentType intentType,
+        address target,
+        uint256 amount
+    );
 
-    modifier onlyL1PortalAlias() {
-        require(msg.sender == AddressAliasHelper.applyL1ToL2Alias(l1Portal), "not l1 portal alias");
-        _;
+    event IntentExecuted(
+        bytes32 indexed txId,
+        IntentType intentType,
+        bool success
+    );
+
+    constructor(
+        address payable wormholeAddr,
+        uint16 chainId_,
+        uint256 evmChainId_,
+        uint8 finality_,
+        address donationContractAddr
+    )
+        VaultGetters(
+            wormholeAddr,
+            chainId_,
+            evmChainId_,
+            finality_,
+            donationContractAddr
+        )
+    {}
+
+    function verifyAndProcessIntent(bytes memory encodedVm) external {
+        bytes memory payload = _verify(encodedVm);
+        _processIntentPayload(payload);
     }
 
-    constructor(address _l1Portal, address _donation) Ownable(msg.sender) {
-        l1Portal = _l1Portal;
-        donationContract = IDonation(_donation);
+    function _verify(
+        bytes memory encodedVm
+    ) internal view returns (bytes memory) {
+        (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole()
+            .parseAndVerifyVM(encodedVm);
+        require(valid, reason);
+
+        bytes32 registeredEmitter = vaultContracts(vm.emitterChainId);
+        require(registeredEmitter == vm.emitterAddress, "Invalid emitter");
+
+        return vm.payload;
     }
 
-    function setDonation(address d) external onlyOwner {
-        donationContract = IDonation(d);
-    }
+    function _processIntentPayload(bytes memory payload) internal {
+        // Aztec sends 8 chunks of 31 bytes each = 248 bytes total
+        require(payload.length >= 124, "Payload too short");
 
-    function handleFromL1(
-        uint32 nonce,
-        uint16 targetChain,
-        address targetContract,
-        uint128 amount,
-        bytes32 recipient,
-        uint8 intentType,
-        bytes calldata data
-    ) external onlyL1PortalAlias {
-        bytes32 txId = keccak256(abi.encode(nonce, targetChain, targetContract, amount, recipient, intentType));
-        require(!processed[txId], "already processed");
-        processed[txId] = true;
+        // Parse 31-byte chunks from Aztec
+        bytes32 txId = bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 0, 31)));
+        
+        uint256 intentTypeRaw = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 31, 31))));
+        
+        // Extract Ethereum address from payload_3 (bytes 11-30 of the 31-byte chunk)
+        bytes memory addressBytes = BytesLib.slice(payload, 62 + 11, 20);
+        address targetAddress = address(uint160(bytes20(addressBytes)));
+        
+        uint256 amount = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 93, 31))));
 
-        IntentType it = IntentType(intentType);
+        require(txId != bytes32(0), "Invalid txId");
+        require(_state.arbitrumMessages[txId] == 0, "Already processed");
+
+        IntentType intentType = IntentType(intentTypeRaw);
+
+        _state.arbitrumMessages[txId] = amount;
         intentAmounts[txId] = amount;
-        intentTypes[txId] = it;
-        intentTargets[txId] = targetContract;
+        intentTypes[txId] = intentType;
+        intentTargets[txId] = targetAddress;
 
-        emit IntentProcessed(txId, it, targetContract, amount);
-        bool ok = _executeIntent(txId, it, targetContract, amount, data);
-        emit IntentExecuted(txId, it, ok);
+        emit IntentProcessed(txId, intentType, targetAddress, amount);
+
+        bool success = _executeIntent(
+            txId,
+            intentType,
+            targetAddress,
+            amount,
+            payload
+        );
+        emit IntentExecuted(txId, intentType, success);
     }
 
     function _executeIntent(
-        bytes32,
-        IntentType it,
+        bytes32 txId,
+        IntentType intentType,
         address target,
         uint256 amount,
-        bytes calldata data
+        bytes memory payload
     ) internal returns (bool) {
-        if (it == IntentType.MULTISIG_EXECUTE) {
-            if (target == address(0)) return false;
-            (bool s,) = target.call(data);
-            return s;
+        if (intentType == IntentType.TRANSFER) {
+            return _handleTransfer(target, amount);
+        } else if (intentType == IntentType.SWAP) {
+            return _handleSwap(txId, target, amount, payload);
+        } else if (intentType == IntentType.MULTISIG_EXECUTE) {
+            return _handleMultisigExecute(txId, target, payload);
+        } else if (intentType == IntentType.BRIDGE) {
+            return _handleBridge(txId, target, amount);
         }
-        if (it == IntentType.TRANSFER || it == IntentType.SWAP || it == IntentType.BRIDGE) {
-            if (address(donationContract) == address(0)) return false;
-            if (amount == 0) return true;
-            donationContract.donate(amount);
+        return false;
+    }
+
+    function _handleTransfer(
+        address target,
+        uint256 amount
+    ) internal returns (bool) {
+        if (amount > 0 && address(donationContract()) != address(0)) {
+            donationContract().donate(amount);
             return true;
         }
         return false;
     }
 
-    function getIntentData(bytes32 txId)
+    function _handleSwap(
+        bytes32 txId,
+        address target,
+        uint256 amount,
+        bytes memory payload
+    ) internal returns (bool) {
+        if (amount > 0) {
+            donationContract().donate(amount);
+            return true;
+        }
+        return false;
+    }
+
+    function _handleMultisigExecute(
+        bytes32 txId,
+        address target,
+        bytes memory payload
+    ) internal returns (bool) {
+        if (payload.length > 155 && target != address(0)) {
+            bytes memory callData = BytesLib.slice(
+                payload,
+                155,
+                payload.length - 155
+            );
+            (bool success, ) = target.call(callData);
+            return success;
+        }
+        return false;
+    }
+
+    function _handleBridge(
+        bytes32 txId,
+        address target,
+        uint256 amount
+    ) internal returns (bool) {
+        if (amount > 0) {
+            donationContract().donate(amount);
+            return true;
+        }
+        return false;
+    }
+
+    function getIntentData(
+        bytes32 txId
+    )
         external
         view
         returns (uint256 amount, IntentType intentType, address target)
@@ -94,5 +185,13 @@ contract ArbitrumIntentVault is Ownable {
         amount = intentAmounts[txId];
         intentType = intentTypes[txId];
         target = intentTargets[txId];
+    }
+
+    function registerEmitter(
+        uint16 chainId_,
+        bytes32 emitterAddress_
+    ) external onlyOwner {
+        require(emitterAddress_ != bytes32(0), "Invalid emitter");
+        _state.vaultImplementations[chainId_] = emitterAddress_;
     }
 }

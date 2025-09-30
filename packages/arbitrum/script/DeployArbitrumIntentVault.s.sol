@@ -2,18 +2,22 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "forge-std/console2.sol";
-import {ArbitrumIntentVault} from "../src/ArbitrumIntentVault.sol";
+import "../src/ArbitrumIntentVault.sol";
 
 contract DeployArbitrumIntentVault is Script {
     function run() external {
-        address l1Portal = vm.envAddress("SEPOLIA_PORTAL");
-        address donation = vm.envAddress("DONATION_ADDRESS");
         vm.startBroadcast();
-        ArbitrumIntentVault v = new ArbitrumIntentVault(l1Portal, donation);
+
+        ArbitrumIntentVault vault = new ArbitrumIntentVault(
+            payable(0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35), // Wormhole on Arbitrum Sepolia 
+            56,                                                    // Aztec chainId in Wormhole (not 23!)
+            421614,                                               // Arbitrum Sepolia EVM chainId
+            1,                                                    // finality
+            0x781a68C3149d13D05a5F0C9E22C9D321d6f620E1           // donation contract (already deployed)
+        );
+
+        console.log("ArbitrumIntentVault deployed at:", address(vault));
+
         vm.stopBroadcast();
-        console2.log("ArbitrumIntentVault", address(v));
-        console2.log("L1_PORTAL", l1Portal);
-        console2.log("DONATION", donation);
     }
 }
