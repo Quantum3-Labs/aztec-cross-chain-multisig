@@ -6,7 +6,7 @@ pub contract PrivateMultisig {
         authwit::{account::AccountActions, entrypoint::{app::AppPayload, fee::FeePayload}},
         context::PrivateContext,
         macros::{
-            functions::{private},
+            functions::{private, public, internal},
             storage::storage,
         },
         oracle::auth_witness::get_auth_witness,
@@ -15,12 +15,12 @@ pub contract PrivateMultisig {
             hash::poseidon2_hash,
             traits::ToField,
         },
-        state_vars::{Map, PrivateMutable, PrivateSet},
+        state_vars::{Map, PrivateMutable, PrivateSet, PublicMutable},
         note::note_getter_options::NoteGetterOptions,
     };
     use dep::value_note::value_note::ValueNote;
 
-    global MAX_SIGNERS: u32 = 20;
+    global MAX_SIGNERS: u32 = 10;
 
     struct TransactionIntent {
         to: AztecAddress,
@@ -76,6 +76,7 @@ pub contract PrivateMultisig {
         signer_pubkeys_x: Map<AztecAddress, PrivateMutable<ValueNote, Context>, Context>,
         signer_pubkeys_y: Map<AztecAddress, PrivateMutable<ValueNote, Context>, Context>,
         signer_count: PrivateMutable<ValueNote, Context>,
+        executed_intents: Map<Field, PublicMutable<bool, Context>, Context>,
     }
 
     #[contract_library_method]
@@ -218,13 +219,13 @@ pub contract PrivateMultisig {
         new_signer: AztecAddress,
         new_signer_pk_x: Field,
         new_signer_pk_y: Field,
-        approved_signers: [AztecAddress; 20],
+        approved_signers: [AztecAddress; 10],
         num_approved: u32,
     ) {
         assert(num_approved <= MAX_SIGNERS, "Too many signers");
         
         let mut approval_count = 0;
-        for i in 0..20 {
+        for i in 0..10 {
             if i < num_approved {
                 let mut options = NoteGetterOptions::new();
                 let approvals = storage.message_approvals
@@ -265,6 +266,8 @@ pub contract PrivateMultisig {
         let new_count = count_note.note.value() + 1;
         let new_count_note = ValueNote::new(new_count, deployer);
         storage.signer_count.replace(new_count_note).discard();
+
+        PrivateMultisig::at(context.this_address())._mark_executed(message_hash).enqueue(&mut context);
     }
 
     #[private]
@@ -317,13 +320,13 @@ pub contract PrivateMultisig {
     fn execute_remove_signer(
         message_hash: Field,
         target_signer: AztecAddress,
-        approved_signers: [AztecAddress; 20],
+        approved_signers: [AztecAddress; 10],
         num_approved: u32,
     ) {
         assert(num_approved <= MAX_SIGNERS, "Too many signers");
         
         let mut approval_count = 0;
-        for i in 0..20 {
+        for i in 0..10 {
             if i < num_approved {
                 let mut options = NoteGetterOptions::new();
                 let approvals = storage.message_approvals
@@ -366,6 +369,8 @@ pub contract PrivateMultisig {
         let deployer = context.msg_sender();
         let new_count_note = ValueNote::new(new_count, deployer);
         storage.signer_count.replace(new_count_note).discard();
+
+        PrivateMultisig::at(context.this_address())._mark_executed(message_hash).enqueue(&mut context);
     }
 
     #[private]
@@ -417,13 +422,13 @@ pub contract PrivateMultisig {
     fn execute_change_threshold(
         message_hash: Field,
         new_threshold: Field,
-        approved_signers: [AztecAddress; 20],
+        approved_signers: [AztecAddress; 10],
         num_approved: u32,
     ) {
         assert(num_approved <= MAX_SIGNERS, "Too many signers");
         
         let mut approval_count = 0;
-        for i in 0..20 {
+        for i in 0..10 {
             if i < num_approved {
                 let mut options = NoteGetterOptions::new();
                 let approvals = storage.message_approvals
@@ -457,6 +462,8 @@ pub contract PrivateMultisig {
         let deployer = context.msg_sender();
         let new_threshold_note = ValueNote::new(new_threshold, deployer);
         storage.threshold.replace(new_threshold_note).discard();
+
+        PrivateMultisig::at(context.this_address())._mark_executed(message_hash).enqueue(&mut context);
     }
 
     #[private]
@@ -538,6 +545,56 @@ pub contract PrivateMultisig {
 
         let approval_note = ValueNote::new(1, caller);
         storage.message_approvals.at(message_hash).at(caller).insert(approval_note).discard();
+    }
+
+    #[private]
+    fn execute_transaction(
+        message_hash: Field,
+        to: AztecAddress,
+        amount: u128,
+        function_selector: Field,
+        data_hash: Field,
+        approved_signers: [AztecAddress; 10],
+        num_approved: u32,
+    ) {
+        assert(num_approved <= MAX_SIGNERS, "Too many signers");
+        
+        let mut approval_count = 0;
+        for i in 0..10 {
+            if i < num_approved {
+                let mut options = NoteGetterOptions::new();
+                let approvals = storage.message_approvals
+                    .at(message_hash)
+                    .at(approved_signers[i])
+                    .get_notes(options.set_limit(1));
+                
+                if approvals.len() > 0 {
+                    let approval_note = approvals.get(0);
+                    if approval_note.note.value() == 1 {
+                        approval_count += 1;
+                    }
+                }
+            }
+        }
+        
+        let threshold_note = storage.threshold.get_note();
+        assert(
+            approval_count >= threshold_note.note.value() as u32,
+            "Insufficient approvals to execute transaction"
+        );
+
+        PrivateMultisig::at(context.this_address())._mark_executed(message_hash).enqueue(&mut context);
+    }
+
+    #[internal]
+    #[public]
+    fn _mark_executed(message_hash: Field) {
+        storage.executed_intents.at(message_hash).write(true);
+    }
+
+    #[public]
+    fn is_executed(message_hash: Field) -> bool {
+        storage.executed_intents.at(message_hash).read()
     }
 
     #[private]
