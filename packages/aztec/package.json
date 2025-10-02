@@ -12,7 +12,7 @@
     "codegen": "aztec codegen target --outdir src/artifacts",
     "compile": "aztec-nargo compile && aztec-postprocess-contract",
     "gen-key": "node --loader ts-node/esm scripts/gen_keypair.ts",
-    "deploy": "node --loader ts-node/esm scripts/deploy_multisig.ts",
+    "deploy": "npx tsx scripts/deploy_multisig.ts",
     "test-multisig": "node --loader ts-node/esm scripts/test_multisig.ts",
     "interaction-existing-contract": "node --loader ts-node/esm scripts/interaction_existing_contract.ts",
     "multiple-pxe": "node --loader ts-node/esm scripts/multiple_pxe.ts",
