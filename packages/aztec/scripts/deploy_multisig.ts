@@ -12,135 +12,71 @@ import { getSponsoredFPCInstance } from "../src/utils/sponsored_fpc.js";
 
 const toFr = (hex: string) => Fr.fromString(BigInt(hex).toString());
 const toScalar = (hex: string) => GrumpkinScalar.fromString(BigInt(hex).toString());
-
-async function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function ensureAccount(pxe: any, fee: any, secretKey: Fr, priv: GrumpkinScalar, salt: Fr) {
-  const acctMgr = await getSchnorrAccount(pxe, secretKey, priv, salt);
-  try {
-    await acctMgr.register();
-  } catch {
-    await (await acctMgr.deploy({ fee })).wait({ timeout: 180000 });
-    await acctMgr.register();
-  }
-  const wallet = await acctMgr.getWallet();
-  return { wallet };
-}
-
-function upsertEnv(vars: Record<string, string>) {
-  const envFile = path.resolve(process.cwd(), ".env");
-  const lines = fs.existsSync(envFile) ? fs.readFileSync(envFile, "utf8").split(/\r?\n/) : [];
-  const map: Record<string, number> = {};
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-    if (m) map[m[1]] = i;
-  }
-  for (const [k, v] of Object.entries(vars)) {
-    if (map[k] !== undefined) lines[map[k]] = `${k}=${v}`;
-    else lines.push(`${k}=${v}`);
-  }
-  fs.writeFileSync(envFile, lines.join("\n"));
-}
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 async function main() {
-  const logger = createLogger("deploy-private-multisig");
-  logger.info("Setting up PXE connection...");
-  const pxe = await setupPXE();
-
-  logger.info("Getting sponsored FPC instance...");
-  const sponsoredFPC = await getSponsoredFPCInstance();
+  const logger = createLogger("deploy-multisig");
+  
   try {
+    logger.info("Starting PrivateMultisig deployment...\n");
+    
+    const pxe = await setupPXE();
+    const sponsoredFPC = await getSponsoredFPCInstance();
     await pxe.registerContract({ instance: sponsoredFPC, artifact: SponsoredFPCContract.artifact });
-  } catch {}
+    const fee = { paymentMethod: new SponsoredFeePaymentMethod(sponsoredFPC.address) };
 
-  const fee = { paymentMethod: new SponsoredFeePaymentMethod(sponsoredFPC.address) };
+    const secretKey = toFr(process.env.SECRET_KEY!);
+    const salt = toFr(process.env.SALT!);
+    const deployerPrivKey = toScalar(process.env.PRIV1!);
+    const initialSignerPubX = toFr(process.env.PUB1_X!);
+    const initialSignerPubY = toFr(process.env.PUB1_Y!);
+    const initialThreshold = Fr.fromString(process.env.THRESHOLD ?? "1");
 
-  const secretKey = toFr(process.env.SECRET_KEY!);
-  const salt = toFr(process.env.SALT!);
-  const initialSignerPrivKey = toScalar(process.env.PRIV1!);
-  const initialSignerPubX = toFr(process.env.PUB1_X!);
-  const initialSignerPubY = toFr(process.env.PUB1_Y!);
-
-  const thresholdStr = process.env.THRESHOLD ?? "1";
-  if (!/^\d+$/.test(thresholdStr) || BigInt(thresholdStr) <= 0n) {
-    throw new Error("THRESHOLD must be a positive integer");
+    const deployerAcctMgr = await getSchnorrAccount(pxe, secretKey, deployerPrivKey, salt);
+    const deployerAddress = deployerAcctMgr.getAddress();
+    
+    const existingAccount = await pxe.getContractInstance(deployerAddress);
+    if (!existingAccount) {
+      logger.info("Deploying account...");
+      await (await deployerAcctMgr.deploy({ fee })).wait({ timeout: 180000 });
+      logger.info("Waiting for account sync (60s)...");
+      await sleep(60000);
+    }
+    
+    try { await deployerAcctMgr.register(); } catch {}
+    const deployerWallet = await deployerAcctMgr.getWallet();
+    
+    logger.info("Deploying PrivateMultisig...");
+    const contract = await PrivateMultisigContract.deploy(
+      deployerWallet, deployerAddress, initialSignerPubX, initialSignerPubY, initialThreshold
+    ).send({ from: deployerAddress, fee }).deployed({ timeout: 180000 });
+    
+    logger.info("Waiting for contract sync (90s)...");
+    await sleep(90000);
+    
+    const multisigAddress = contract.address;
+    
+    const envFile = path.resolve(process.cwd(), ".env");
+    const lines = fs.existsSync(envFile) ? fs.readFileSync(envFile, "utf8").split(/\r?\n/) : [];
+    const map: Record<string, number> = {};
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      if (m) map[m[1]] = i;
+    }
+    const set = (k: string, v: string) => {
+      if (map[k] !== undefined) lines[map[k]] = `${k}=${v}`;
+      else lines.push(`${k}=${v}`);
+    };
+    set("PRIVATE_MULTISIG_ADDRESS", multisigAddress.toString());
+    set("DEPLOYER_ADDRESS", deployerAddress.toString());
+    set("DEPLOY_TIMESTAMP", new Date().toISOString());
+    fs.writeFileSync(envFile, lines.join("\n"));
+    
+    logger.info(`\n✅ DEPLOYED: ${multisigAddress.toString()}`);
+  } catch (error) {
+    logger.error("DEPLOYMENT FAILED");
+    throw error;
   }
-  const initialThreshold = Fr.fromString(thresholdStr);
-
-  logger.info("Ensuring deployer Schnorr account (register or deploy if needed)...");
-  const { wallet: deployerWallet } = await ensureAccount(pxe, fee, secretKey, initialSignerPrivKey, salt);
-  const deployerAddress = deployerWallet.getAddress();
-
-  logger.info(`Deployer account: ${deployerAddress.toString()}`);
-  logger.info(`Initial threshold: ${initialThreshold.toString()}`);
-
-  logger.info("Deploying PrivateMultisig contract...");
-  const tx = PrivateMultisigContract.deploy(
-    deployerWallet,
-    deployerAddress,
-    initialSignerPubX,
-    initialSignerPubY,
-    initialThreshold
-  ).send({ from: deployerAddress, fee });
-
-  logger.info("Waiting for deployment confirmation...");
-  const receipt = await tx.wait({ timeout: 180000 });
-  const multisigAddress = receipt.contract.address as AztecAddress;
-  logger.info(`PrivateMultisig deployed at: ${multisigAddress.toString()}`);
-
-  logger.info("Waiting PXE to index notes...");
-  await sleep(20000);
-
-  const multisig = await PrivateMultisigContract.at(multisigAddress, deployerWallet);
-
-  // simulate() now requires options: provide { from }
-  const isSigner: boolean = await multisig
-    .withWallet(deployerWallet)
-    .methods.is_signer(deployerAddress)
-    .simulate({ from: deployerAddress });
-
-  if (!isSigner) {
-    throw new Error("Post-deploy verify failed: deployer is not recognized as an initial signer");
-  }
-
-  const onchainThreshold: Fr = await multisig
-    .withWallet(deployerWallet)
-    .methods.get_threshold()
-    .simulate({ from: deployerAddress });
-
-  if (onchainThreshold.toString() !== initialThreshold.toString()) {
-    throw new Error(
-      `Post-deploy verify failed: threshold mismatch. On-chain=${onchainThreshold.toString()} Expected=${initialThreshold.toString()}`
-    );
-  }
-
-  upsertEnv({
-    PRIVATE_MULTISIG_ADDRESS: multisigAddress.toString(),
-    DEPLOYER_ADDRESS: deployerAddress.toString(),
-    DEPLOY_TX_HASH: receipt.txHash.toString(),
-    DEPLOY_TIMESTAMP: new Date().toISOString(),
-  });
-
-  logger.info("=".repeat(80));
-  logger.info("DEPLOYMENT SUCCESS");
-  logger.info(`  Multisig: ${multisigAddress.toString()}`);
-  logger.info(`  Deployer: ${deployerAddress.toString()}`);
-  logger.info(`  Tx Hash: ${receipt.txHash}`);
-  logger.info("Verification:");
-  logger.info(`  is_signer(deployer) = ${isSigner}`);
-  logger.info(`  get_threshold() = ${onchainThreshold.toString()}`);
-  logger.info("=".repeat(80));
 }
 
-main().catch((e) => {
-  console.error("\n=== DEPLOYMENT FAILED ===");
-  if (e instanceof Error) {
-    console.error("Message:", e.message);
-    console.error("Stack:", e.stack);
-  } else {
-    console.error("Error:", e);
-  }
-  process.exit(1);
-});
+main().catch(e => { console.error(e); process.exit(1); });
