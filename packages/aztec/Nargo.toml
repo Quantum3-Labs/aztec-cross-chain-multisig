@@ -1,5 +1,5 @@
 [package]
-name = "custom_account"
+name = "private_multisig"
 authors = [""]
 compiler_version = ">=0.25.0"
 type = "contract"
@@ -9,8 +9,9 @@ enums = true
 
 [dependencies]
 aztec = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v2.0.2", directory = "noir-projects/aztec-nr/aztec" }
-compressed_string = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v2.0.2", directory = "noir-projects/aztec-nr/compressed-string" }
 schnorr = { tag = "v0.1.3", git = "https://github.com/noir-lang/schnorr" }
+compressed_string = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v2.0.2", directory = "noir-projects/aztec-nr/compressed-string" }
+
 value_note = { git="https://github.com/AztecProtocol/aztec-packages/", tag="v2.0.2", directory="noir-projects/aztec-nr/value-note" }
 address_note = { git="https://github.com/AztecProtocol/aztec-packages/", tag="v2.0.2", directory="noir-projects/aztec-nr/address-note" }
 protocol_types = { git="https://github.com/AztecProtocol/aztec-packages/", tag="v2.0.2", directory="noir-projects/noir-protocol-circuits/crates/types"}
