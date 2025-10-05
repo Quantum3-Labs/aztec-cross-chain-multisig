@@ -14,7 +14,7 @@
     "gen-key": "node --loader ts-node/esm scripts/gen_keypair.ts",
     "deploy": "npx tsx scripts/deploy_multisig.ts",
     "deploy-accounts": "npx tsx scripts/deploy_accounts.ts",
-    "test-multisig": "npx tsx scripts/test_multisig.ts",
+    "test-multisig-public": "npx tsx scripts/test_multisig_public.ts",
     "interaction-existing-contract": "node --loader ts-node/esm scripts/interaction_existing_contract.ts",
     "multiple-pxe": "node --loader ts-node/esm scripts/multiple_pxe.ts",
     "get-block": "node --loader ts-node/esm scripts/get_block.ts",
