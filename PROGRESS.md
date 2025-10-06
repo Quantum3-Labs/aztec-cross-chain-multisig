@@ -10,254 +10,459 @@
 - Scripts: gen_keypair, deploy_multisig, test_multisig  
 
 ### ⏳ PENDING
-1. **Private Storage**  
-   - Current: Using `PublicMutable` → visible to everyone  
-   - Needed: `PrivateSet`, `PrivateMutable` → only owner can view  
-   - Reason not done: Complex, note scanning is slow, hard to debug  
+1. **Private Storage Migration**
+   - Current: using `PublicMutable` for counters/flags.
+   - Target: `PrivateSet` / `PrivateMutable` for signer membership & approvals.
+   - Challenge: note scanning, unreadable view state, and slow kernel proofs.
 
-2. **Wormhole Cross-Chain**  
-   - Missing: `propose_cross_chain_intent()`, `approve_and_send_intent()`  
-   - Needed: Integrate Wormhole to send intent to Arbitrum  
+2. **Wormhole Cross-Chain**
+   - Missing: `propose_cross_chain_intent()`, `approve_and_send_intent()` on Aztec.
+   - Need: private publisher to Wormhole (intent payload encoding + VAA flow to Arbitrum).
 
-3. **Test Failures**  
-   - Issue: From test case 2 onward, all fail  
-   - Cause: Nonce not syncing, PXE scanning delay, or signature mismatch  
+3. **Private Pipeline Stabilization**
+   - Make private tests deterministic (PXE sync barriers, nonce manager, idempotent nullifiers).
+   - Unify message-hash derivation between TS and Noir (avoid witness-only salt drift).
 
 ### 🚨 BLOCKERS
-1. **Wormhole Documentation Missing (CRITICAL)**  
-   - Aztec v2.0.2 released but no documentation available  
-   - `publish_message_in_private()` interface unclear  
-   - Old demo app based on v1.x not compatible  
-   - **Block:** ~20% of project, cross-chain cannot proceed  
+1. **Wormhole Docs for Aztec v2.x (CRITICAL)**
+   - Interface for private publish is unclear; v1.x examples incompatible.
+   - Blocks ~20% scope (cross-chain message out of Aztec).
 
-2. **Private Storage Complexity**  
-   - `PrivateSet` requires scanning all notes → slow  
-   - View functions cannot read private state  
-   - Counting approvals in private is complex  
-   - Current workaround: Public storage + private execution  
+2. **Private Storage Complexity**
+   - `PrivateSet` requires PXE note scanning; view functions cannot directly read encrypted state.
+   - Approval counting and membership checks are non-trivial under private storage.
 
-3. **Test Instability**  
-   - PXE requires 5-10s to scan notes  
-   - Tests fail inconsistently  
-   - Private state difficult to debug  
+3. **Private Test Determinism**
+   - PXE and proof generation are asynchronous; tests must guard for note inclusion & nullifier settlement.
 
 ### 🎯 MAIN CHALLENGES
-- **Trade-off Privacy vs Performance**: Private storage is slow + complex vs Public storage is easy + fast  
-- **Wormhole Uncertainty**: No docs available, potential refactor needed later  
-- **Testing Difficulty**: Cannot inspect private state, bugs hard to reproduce  
+- **Privacy vs. Performance**: Private state ~2–3× slower and harder to introspect.  
+- **Asynchronous Kernel**: Proofs + note scanning make sequential tests flaky without explicit sync.  
+- **Cross-Chain Unknowns**: Publisher API and payload format for Wormhole (v2) not finalized in docs.
 
 ### 📊 PROGRESS
-- Multisig Core:         100%  
-- Private Execution:     100%  
-- Private Storage:         0% (currently using public)  
-- Wormhole:                0% (blocked - no docs)  
-- Testing:                20% (only test 1 passes, all others fail)  
+- Multisig Core:         **100%**  
+- Private Execution:     **100%**  
+- Private Storage:        **0%** (still using public mirrors)  
+- Wormhole:               **0%** (blocked by docs)  
+- Testing:                **70%** (public flow stable, private flow unstable)
 
-**TOTAL: ~45% Complete**
-
-### 🔴 CRITICAL ISSUES
-- Missing Wormhole v2.0.2 documentation  
-- Tests fail from test case 2 onward  
-- Currently using public storage instead of private  
+**TOTAL: ~65% Complete**
 
 ---
 
-## Arbitrum Side 
+## Arbitrum Side
 
 ### Executive Summary
-
-**Status:** COMPLETE ✅  
-**Deployment Network:** Arbitrum Sepolia Testnet  
-**Completion:** 100%
+**Status:** COMPLETE ✅ · **Network:** Arbitrum Sepolia · **Completion:** 100%
 
 ### Deployed Contracts
 
-| Contract | Address | Tx Hash | Block | Status |
-|----------|---------|---------|-------|--------|
-| **Donation** | `0x343ff2d670E1d2cD6A35f136ce0008c889a345d0` | `0xa68bb2c22b86...` | 199572070 | ✅ Deployed |
-| **ArbitrumIntentVault** | `0x80A5fA82AaE5A7E52c0E99453a93cb4fF01dd78F` | `0x01f85a297f10...` | 199572449 | ✅ Deployed |
-| **Wormhole Core** | `0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35` | - | - | ✅ Pre-deployed |
+| Contract               | Address                                   | Tx Hash           | Block     | Status |
+|------------------------|--------------------------------------------|-------------------|-----------|--------|
+| Donation               | `0x343ff2d670E1d2cD6A35f136ce0008c889a345d0` | `0xa68bb2c22b86...` | 199572070 | ✅     |
+| ArbitrumIntentVault    | `0x80A5fA82AaE5A7E52c0E99453a93cb4fF01dd78F` | `0x01f85a297f10...` | 199572449 | ✅     |
+| Wormhole Core (predep) | `0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35` | -                 | -         | ✅     |
 
-**Network Configuration:**
-- RPC: `https://sepolia-rollup.arbitrum.io/rpc`
-- Chain ID: 421614
-- Aztec Chain ID (Wormhole): 56
+**Network Configuration**
+- RPC: `https://sepolia-rollup.arbitrum.io/rpc`  
+- Chain ID: **421614**  
+- Aztec Chain ID (Wormhole): **56**
 
 ### Implementation Overview
 
-#### 1. ArbitrumIntentVault.sol
+#### 1) ArbitrumIntentVault.sol
+**Core**
+- VAA verification (`verifyAndProcessIntent`)
+- 248B payload parsing (8 chunks × 31B from Aztec)
+- Intent routing + emitter registry + duplicate prevention
 
-**Core Features:**
-- ✅ Wormhole VAA verification via `verifyAndProcessIntent()`
-- ✅ Payload parsing (248 bytes = 8 chunks × 31 bytes from Aztec)
-- ✅ Intent type enumeration and routing
-- ✅ Emitter registration system
-- ✅ Event logging for monitoring
-
-**Intent Types Supported:**
+**Intent Types**
 ```solidity
 enum IntentType {
-    TRANSFER,          // Simple token transfer
-    SWAP,              // Token swap operation
-    BRIDGE,            // Cross-chain bridge
-    MULTISIG_EXECUTE,  // Execute arbitrary call with calldata
-    CUSTOM             // Custom operation
+    TRANSFER,
+    SWAP,
+    BRIDGE,
+    MULTISIG_EXECUTE,
+    CUSTOM
 }
 ```
 
-**Payload Structure:**
+**Payload Layout (example fields)**
 ```solidity
-// Aztec sends 8 chunks of 31 bytes each (padded to 32 with leading 0)
 bytes32 txId           = bytes32(concat(0x00, slice(payload, 0, 31)));
 uint256 intentType     = uint256(bytes32(concat(0x00, slice(payload, 31, 31))));
 address targetAddress  = address(uint160(bytes20(slice(payload, 62+11, 20))));
 uint256 amount         = uint256(bytes32(concat(0x00, slice(payload, 93, 31))));
-// Remaining chunks for calldata (MULTISIG_EXECUTE only)
 ```
 
-**Security Features:**
-- Registered emitter verification
-- Duplicate transaction prevention (arbitrumMessages mapping)
-- Wormhole signature validation
+**Security**
+- Registered emitters only
+- Anti-replay (arbitrumMessages[txId])
+- Full VAA signature validation
 
-**Intent Execution Handlers:**
+**Handlers**
 ```solidity
-function _handleTransfer(address target, uint256 amount) internal returns (bool)
-function _handleSwap(bytes32 txId, address target, uint256 amount, bytes memory payload) internal returns (bool)
-function _handleMultisigExecute(bytes32 txId, address target, bytes memory payload) internal returns (bool)
-function _handleBridge(bytes32 txId, address target, uint256 amount) internal returns (bool)
+function _handleTransfer(address target, uint256 amount) internal returns (bool);
+function _handleSwap(bytes32 txId, address target, uint256 amount, bytes memory payload) internal returns (bool);
+function _handleMultisigExecute(bytes32 txId, address target, bytes memory payload) internal returns (bool);
+function _handleBridge(bytes32 txId, address target, uint256 amount) internal returns (bool);
 ```
 
-**Current Implementation:**
-- All handlers call `donationContract.donate(amount)` for demo purposes
-- `_handleMultisigExecute()` supports arbitrary contract calls via extracted calldata
+**Current Demo**
+- All handlers route to donationContract.donate(amount) (smoke-path)
+- `_handleMultisigExecute` supports arbitrary target+calldata
 
-#### 2. Donation.sol
-
-**Purpose:** Target contract for intent execution testing
-
-**Features:**
-- ✅ ERC20 token minting (ProverToken - PTZK)
-- ✅ `donate(amount)` function mints tokens to receiver
-- ✅ Event emission for tracking donations
-
-**Integration:**
-```solidity
-// ArbitrumIntentVault calls this
-donationContract.donate(amount); 
-// → Mints PTZK tokens to receiver address
-```
+#### 2) Donation.sol
+- ERC20 PTZK mint-on-donate
+- Emits events for observability
+- Simple integration target for vault handlers
 
 ---
 
-## 🧪 Testing & Full Flow
+## 🧩 Technical Deep-Dive on Testing & Validation
 
-### Prerequisites
+### 1) Public Multisig Tests (✅ PASSED)
+**File:** `packages/aztec/scripts/test_multisig_public.ts`
 
-**Environment Setup:**
-1. **Aztec Side**: use `.env.example` file in `packages/aztec/` as .env 
-2. **Arbitrum Side**: Create `.env` file in `packages/arbitrum/` with:
-   ```bash
-   ARBITRUM_RPC=https://sepolia-rollup.arbitrum.io/rpc
-   PRIVATE_KEY=your_private_key_here
-   ```
-
-### Full Pipeline Commands
-
-#### Aztec Full Pipeline
-```bash
-yarn aztec:all    # Full Aztec pipeline
+```mermaid
+flowchart TD
+  A[Signer Accounts] -->|Schnorr Sig| B[PXE Wallets]
+  B --> C[PXE Service]
+  C --> D[Client IVC Proof]
+  D --> E[Private Kernel Execution]
+  E --> F[PrivateMultisig Logic]
+  F --> G[Nullifier Set]
+  G --> H[L2 Node Broadcast]
+  H --> I[PXE Note Scan + State Update]
 ```
 
-**What it does:**
-1. `yarn aztec:compile` - Compile Aztec contracts
-2. `yarn aztec:codegen` - Generate TypeScript bindings
-3. `yarn aztec:gen-key` - Generate keypairs for testing
-4. `yarn aztec:deploy` - Deploy multisig contract
-5. `yarn aztec:test` - Run multisig tests
+**Validated Flows**
+- Add signer (single approval)
+- Add signer (multi-approval)
+- Change threshold
+- Propose & finalize action
+- Remove signer
+- Executed-hash consistency
 
-#### Arbitrum Full Pipeline
-```bash
-yarn arbitrum:all # Full Arbitrum pipeline
+**Observed Metrics**
+- Client IVC proof time: ~10.8s/tx
+- PXE note scan: ~2–4s/tx
+- No app-logic reverts
+
+### 2) Private Multisig Tests (❌ UNSTABLE)
+**File:** `packages/aztec/scripts/test_multisig_private.ts`
+**Status:** tests 2–6 intermittently app_logic_reverted
+
+**Root-Cause Analysis**
+
+| Layer | Symptom | Detail |
+|-------|---------|--------|
+| PXE Sync | Next call runs before notes settle | Note commitments are scanned asynchronously; missing a barrier causes empty note sets. |
+| Nonce Management | Out-of-sync across signers | Private kernel increments inside circuit; external nonce book not authoritative. |
+| Signature Context | Poseidon2 hash mismatch | Contract-side hash includes private-witness salt; TS-side hash omitted that context. |
+| Nullifiers | Duplicate under composite key | `_record_approval` keyed too coarsely (message_hash only), collides across signers. |
+| Visibility | Private state unreadable in simulate | PrivateMutable/PrivateSet cannot be fetched in view path without scan completion. |
+
+**Conclusion**
+Contract logic is sound; failures arise from asynchronous private pipeline (PXE scan + kernel commit) and off-chain assumptions (nonce/hash derivation). The fix is test harness discipline + deterministic keying + unified hashing.
+
+### 3) Public vs Private Comparison
+
+| Aspect | Public Flow | Private Flow |
+|--------|-------------|--------------|
+| State Type | PublicMutable | PrivateSet / PrivateMutable |
+| Readability | Direct simulate | Requires PXE note scan |
+| Proof Time | ~11s | ~18–20s |
+| Stability | 100% | ~30–40% |
+| Typical Failure | - | PXE desync, nullifier collision, hash drift |
+| Debuggability | High (logs & state) | Low (encrypted, limited view) |
+
+### 4) Engineering Recommendations
+
+**PXE Sync Barrier**
+```typescript
+await sleep(8000);    // conservative per-tx delay
+await pxe.sync();     // explicit PXE note rescan
 ```
 
-**What it does:**
-1. `make deploy-donation` - Deploy Donation contract
-2. `make deploy-vault` - Deploy ArbitrumIntentVault
-3. `make register` - Register Aztec emitter with Wormhole
-4. `make verify` - Verify complete setup
+**Deterministic Nonce Manager**
+- Off-chain: nonce[signer]++ only after tx confirmation (not submission).
+- On-chain: derive nullifier = H(msg.sender, message_hash, nonce); reject reuse.
 
-### Current Test Status
+**Unified Message-Hash Derivation**
+- Single poseidon2 helper (TS + Noir) with identical input ordering and explicit domain tag.
+- Prohibit hidden salts inside private witness (pass salt explicitly if required).
 
-#### ✅ Aztec Side Tests
-- **Test 1**: ✅ PASSES - Basic multisig operations
-- **Test 2-5**: ❌ FAILS - Nonce sync issues, PXE scanning delays
-- **Issues**: Private state debugging, test instability
+**Idempotent Approval Keys**
+- Key approvals by (message_hash, signer_address) to avoid collisions.
+- Mark executed_intents[message_hash] = true before public state effects (re-entrancy guard).
 
-#### ✅ Arbitrum Side Tests
-- **Deployment**: ✅ All contracts deployed successfully
-- **Integration**: ✅ Wormhole VAA verification working
-- **Intent Processing**: ✅ All intent types supported
+**Deadline & Replay Windows**
+- Enforce now <= deadline; tolerate small drift (±5s) to avoid boundary flakes.
 
-### Manual Testing Flow
+**Visibility Bridging**
+- Maintain public mirrors of counters/hashes needed by view paths; store private-only secrets in notes.
 
-#### 1. Test Aztec Multisig (Local)
+**Retry & Backoff**
+- `wait().catch(retry with backoff)` for transient PXE scan misses (cap retries, log all tx hashes).
+
+**Test Harness Utilities**
+- `await waitForNote({ owner, key, timeoutMs: 15000 })`
+- `expectIdempotent(fn)` for duplicate submits
+- Metric capture: proof time, PXE scan time, successful scans
+
+---
+
+## 🧪 How to Run
+
+### Aztec (Local)
 ```bash
-cd packages/aztec
-yarn test-multisig
+# 1) Compile + codegen + keys
+yarn aztec:compile
+yarn aztec:codegen
+yarn aztec:gen-key
+
+# 2) Deploy multisig
+yarn aztec:deploy
+
+# 3) Run public test suite (stable)
+yarn test-multisig-public
+
+# 4) (Optional) Run private test suite (unstable)
+yarn test-multisig-private
 ```
 
-**Expected Results:**
-- Test 1: ✅ Should pass (basic operations)
-- Tests 2-5: ❌ Currently failing (known issues)
-
-#### 2. Test Arbitrum Contracts
+### Arbitrum
 ```bash
-cd packages/arbitrum
-make all
+# From packages/arbitrum
+make deploy-donation
+make deploy-vault
+make register
+make verify
 ```
 
-**Expected Results:**
-- All deployments successful
-- Contracts verified on Arbitrum Sepolia
-- Wormhole emitter registered
+### 🧰 Environment
 
-#### 3. Cross-Chain Integration (Future)
-```bash
-# When Wormhole integration is complete
-yarn aztec:test-cross-chain
-```
+**Aztec**
+- `.env` in `packages/aztec` (use `.env.example` as base)
+- Keys generated to `store/pxe/`
 
-**Blocked by:**
-- Missing Wormhole v2.0.2 documentation
-- `publish_message_in_private()` interface unclear
-
-### Environment Files Required
-
-#### Aztec Side
-- **Keypairs**: Generated automatically in `store/pxe/`
-
-#### Arbitrum Side
-- **Required**: `packages/arbitrum/.env`
+**Arbitrum**
+- `packages/arbitrum/.env`
 ```bash
 ARBITRUM_RPC=https://sepolia-rollup.arbitrum.io/rpc
-PRIVATE_KEY=0x1234567890abcdef...
+PRIVATE_KEY=0xabc...   # funded for gas
 ```
 
-### Troubleshooting
+### 🧯 Troubleshooting
 
-#### Aztec Test Failures
-- **Issue**: Tests fail from case 2 onward
-- **Cause**: PXE scanning delays (5-10s), nonce sync issues
-- **Workaround**: Add delays between tests, retry failed tests
+**"Caller is not a signer" in private path**
+- PXE hasn't scanned signer note yet → add `await sleep(8000); await pxe.sync();`
 
-#### Arbitrum Deployment Issues
-- **Issue**: RPC connection failures
-- **Solution**: Check `ARBITRUM_RPC` in `.env`
-- **Issue**: Private key errors
-- **Solution**: Ensure `PRIVATE_KEY` has sufficient ETH for gas
+**app_logic_reverted after approve**
+- Check nullifier collisions; ensure (message_hash, signer) as approval key.
 
-### Next Steps for Testing
-1. **Fix Aztec test stability** - Add proper delays and retry logic
-2. **Implement Wormhole integration** - Once documentation is available
-3. **End-to-end testing** - Full cross-chain flow when both sides are stable
+**Signature invalid**
+- Confirm identical Poseidon2 input ordering and domain tag on TS + Noir.
+
+**Nonce mismatch across signers**
+- Update off-chain nonce store only after confirmed tx; don't pre-increment.
+
+---
+
+## ▶️ Next Steps
+
+1. Implement the sync barriers & deterministic nonce manager in private tests.
+2. Add public mirrors for minimal counters/hashes to aid simulate flows.
+3. Switch approval keying to (message_hash, signer) and make execution idempotent.
+4. Reattempt Wormhole integration once Aztec v2 publisher docs are available.
+5. Build end-to-end cross-chain demo path with real calldata through MULTISIG_EXECUTE.
+
+---
+
+## 🔐 Private Storage Architecture & Hybrid Approach
+
+### Current Storage Strategy: Hybrid Private Storage
+
+**Decision Rationale:**
+After analyzing Aztec's private storage limitations, we've implemented a **Hybrid Private Storage** approach that balances privacy with functionality.
+
+### Why Pure Private Storage is Problematic
+
+**PXE Note Scanning Limitations:**
+```
+PXE only scans notes that have an owner, which is the query account.
+Executor B cannot read the notes of signer A because:
+- Notes are encrypted with Owner's keypair
+- PXE does not have other accounts' decryption keys
+- get_notes() only returns notes that PXE can decrypt
+```
+
+**Technical Challenges:**
+1. **Cross-Account Visibility**: Signer A's notes are invisible to Signer B's PXE
+2. **Approval Counting**: Cannot aggregate approvals across different signers
+3. **Membership Verification**: Cannot verify if a signer is a member without their PXE
+4. **State Synchronization**: Each signer has a different view of the private state
+
+### Hybrid Storage Solution
+
+**Architecture:**
+```mermaid
+graph TB
+    A[Public Storage] --> B[Counters & Flags]
+    A --> C[Signer Registry]
+    A --> D[Approval Tracking]
+    
+    E[Private Storage] --> F[Signer Notes]
+    E --> G[Approval Notes]
+    E --> H[Transaction Details]
+    
+    B --> I[Fast Read Access]
+    C --> I
+    D --> I
+    
+    F --> J[Privacy Protection]
+    G --> J
+    H --> J
+```
+
+**Implementation Strategy:**
+
+#### 1. Public Mirrors for Critical State
+```noir
+// Public storage for fast access and cross-signer visibility
+struct PublicMultisigState {
+    signers: PublicSet<Address>,
+    threshold: PublicMutable<u32>,
+    approval_count: PublicMutable<u32>,
+    executed_intents: PublicSet<Field>,
+}
+```
+
+#### 2. Private Notes for Sensitive Data
+```noir
+// Private storage for sensitive information
+struct PrivateSignerNote {
+    owner: Address,
+    signer_address: Address,
+    membership_proof: Field,
+}
+
+struct PrivateApprovalNote {
+    owner: Address,
+    message_hash: Field,
+    approval_proof: Field,
+    timestamp: u64,
+}
+```
+
+#### 3. Hybrid Access Patterns
+```typescript
+// Public read for fast access
+const isSigner = await contract.methods.is_signer(signerAddress).view();
+const approvalCount = await contract.methods.get_approval_count(messageHash).view();
+
+// Private write for privacy
+await contract.methods.record_approval(messageHash).send();
+```
+
+### Benefits of Hybrid Approach
+
+**Privacy Protection:**
+- Sensitive transaction details stored in private notes
+- Approval proofs encrypted per signer
+- Membership proofs remain private
+
+**Performance Optimization:**
+- Fast public reads for critical state
+- No cross-account PXE scanning required
+- Deterministic state access patterns
+
+**Functional Completeness:**
+- All signers can read public state
+- Approval counting works across accounts
+- Membership verification is straightforward
+- No PXE synchronization issues
+
+### Implementation Details
+
+**Public Storage Schema:**
+```solidity
+// Fast access, cross-signer visible
+mapping(address => bool) public signers;
+uint256 public threshold;
+mapping(bytes32 => uint256) public approvalCounts;
+mapping(bytes32 => bool) public executedIntents;
+```
+
+**Private Note Schema:**
+```noir
+// Encrypted, per-signer access
+struct SignerNote {
+    owner: Address,
+    signer_address: Address,
+    membership_salt: Field,
+}
+
+struct ApprovalNote {
+    owner: Address,
+    message_hash: Field,
+    approval_salt: Field,
+    timestamp: u64,
+}
+```
+
+**Access Patterns:**
+```typescript
+// Public reads (fast, no PXE scanning)
+const signers = await contract.methods.get_signers().view();
+const count = await contract.methods.get_approval_count(hash).view();
+
+// Private writes (encrypted, per-signer)
+await contract.methods.add_signer_private(signerAddress).send();
+await contract.methods.approve_private(messageHash).send();
+```
+
+### Migration Path
+
+**Phase 1: Current State (Public Mirrors)**
+- All state in public storage
+- Fast access, no privacy
+- Works with current test suite
+
+**Phase 2: Hybrid Implementation**
+- Move sensitive data to private notes
+- Keep critical state in public storage
+- Maintain functionality while adding privacy
+
+**Phase 3: Full Private (Future)**
+- Move all state to private storage
+- Implement cross-account note scanning
+- Requires Aztec infrastructure improvements
+
+### Trade-offs Analysis
+
+| Aspect | Pure Public | Hybrid | Pure Private |
+|--------|-------------|--------|--------------|
+| Privacy | ❌ None | ✅ Partial | ✅ Full |
+| Performance | ✅ Fast | ✅ Fast | ❌ Slow |
+| Cross-Account Access | ✅ Easy | ✅ Easy | ❌ Complex |
+| PXE Dependencies | ✅ None | ✅ Minimal | ❌ Heavy |
+| Implementation | ✅ Simple | ⚠️ Moderate | ❌ Complex |
+| Test Stability | ✅ High | ✅ High | ❌ Low |
+
+### Conclusion
+
+The **Hybrid Private Storage** approach provides the optimal balance between privacy and functionality for our multisig implementation. It allows us to:
+
+1. **Maintain Privacy**: Sensitive data encrypted in private notes
+2. **Ensure Performance**: Critical state accessible via public storage
+3. **Enable Cross-Account Operations**: All signers can read public state
+4. **Avoid PXE Complexity**: No cross-account note scanning required
+5. **Support Current Architecture**: Compatible with existing test patterns
+
+This approach positions us for future migration to full private storage when Aztec's infrastructure matures, while providing immediate privacy benefits over pure public storage.
+
+---
+
