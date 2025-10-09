@@ -9,7 +9,7 @@
   "scripts": {
     "clean": "rm -rf ./src/artifacts ./target",
     "clear-store": "rm -rf ./store",
-    "codegen": "aztec codegen target --outdir src/artifacts",
+    "codegen": "aztec codegen target --outdir src/artifacts --force",
     "compile": "aztec-nargo compile && aztec-postprocess-contract",
     "gen-key": "node --loader ts-node/esm scripts/gen_keypair.ts",
     "deploy": "npx tsx scripts/deploy_multisig.ts",

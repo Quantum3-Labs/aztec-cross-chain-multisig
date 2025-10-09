@@ -1,0 +1,28 @@
+# docker-compose.yml
+services:
+  aztec-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.aztec
+    container_name: aztec-app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    working_dir: /app
+    environment:
+      - NODE_URL=https://aztec-testnet-fullnode.zkv.xyz
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://aztec-testnet-fullnode.zkv.xyz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    command: >
+      sh -c "
+      cd packages/aztec &&
+      cp .env.example .env &&
+      cd /app &&
+      yarn aztec:gen-key &&
+      yarn aztec:deploy &&
+      yarn aztec:test
+      "

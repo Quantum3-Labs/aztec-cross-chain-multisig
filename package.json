@@ -11,10 +11,10 @@
     "packages/*"
   ],
   "scripts": {
-    "aztec:compile": "cd packages/aztec && yarn compile",
+    "aztec:compile": "cd packages/aztec && yarn clean && yarn clear-store && yarn compile",
     "aztec:codegen": "cd packages/aztec && yarn codegen",
     "aztec:gen-key": "cd packages/aztec && yarn gen-key",
-    "aztec:deploy": "cd packages/aztec && yarn deploy",
+    "aztec:deploy": "cd packages/aztec && yarn deploy-accounts && yarn deploy",
     "aztec:test": "cd packages/aztec && yarn test-multisig-public",
     "aztec:all": "yarn aztec:compile && yarn aztec:codegen && yarn aztec:gen-key && yarn aztec:deploy && yarn aztec:test",
     "arbitrum:build": "forge -C packages/arbitrum build",

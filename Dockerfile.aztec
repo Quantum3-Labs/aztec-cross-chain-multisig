@@ -1,0 +1,10 @@
+FROM node:24
+
+WORKDIR /app
+
+COPY package.json yarn.lock ./
+COPY packages/aztec/package.json ./packages/aztec/
+
+RUN yarn install
+
+COPY . .
