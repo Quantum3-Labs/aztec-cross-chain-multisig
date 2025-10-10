@@ -18,12 +18,15 @@ contract ArbitrumIntentVault is VaultGetters {
     mapping(bytes32 => uint256) public intentAmounts;
     mapping(bytes32 => IntentType) public intentTypes;
     mapping(bytes32 => address) public intentTargets;
+    mapping(bytes32 => address) public intentRecipients;
 
     event IntentProcessed(
         bytes32 indexed txId,
+        uint16 targetChain,
+        address targetContract,
         IntentType intentType,
-        address target,
-        uint256 amount
+        uint256 amount,
+        address recipient
     );
 
     event IntentExecuted(
@@ -67,63 +70,77 @@ contract ArbitrumIntentVault is VaultGetters {
     }
 
     function _processIntentPayload(bytes memory payload) internal {
-        // Aztec sends 8 chunks of 31 bytes each = 248 bytes total
-        require(payload.length >= 124, "Payload too short");
+        require(payload.length >= 186, "Payload too short");
 
-        // Parse 31-byte chunks from Aztec
-        bytes32 txId = bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 0, 31)));
-        
-        uint256 intentTypeRaw = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 31, 31))));
-        
-        // Extract Ethereum address from payload_3 (bytes 11-30 of the 31-byte chunk)
-        bytes memory addressBytes = BytesLib.slice(payload, 62 + 11, 20);
-        address targetAddress = address(uint160(bytes20(addressBytes)));
-        
-        uint256 amount = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 93, 31))));
+        // Parse according to Aztec payload structure:
+        // [0] message_hash (31 bytes)
+        // [1] target_chain (31 bytes)
+        // [2] target_contract (31 bytes)
+        // [3] intent_type (31 bytes)
+        // [4] amount (31 bytes)
+        // [5] recipient (31 bytes)
 
-        require(txId != bytes32(0), "Invalid txId");
-        require(_state.arbitrumMessages[txId] == 0, "Already processed");
+        bytes32 messageHash = bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 0, 31)));
+        
+        uint16 targetChain = uint16(uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 31, 31)))));
+        
+        bytes memory targetContractBytes = BytesLib.slice(payload, 62 + 11, 20);
+        address targetContract = address(uint160(bytes20(targetContractBytes)));
+        
+        uint256 intentTypeRaw = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 93, 31))));
+        
+        uint256 amount = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 124, 31))));
+        
+        bytes memory recipientBytes = BytesLib.slice(payload, 155 + 11, 20);
+        address recipient = address(uint160(bytes20(recipientBytes)));
+
+        require(messageHash != bytes32(0), "Invalid message hash");
+        require(_state.arbitrumMessages[messageHash] == 0, "Already processed");
+        require(targetChain == chainId(), "Wrong chain");
 
         IntentType intentType = IntentType(intentTypeRaw);
 
-        _state.arbitrumMessages[txId] = amount;
-        intentAmounts[txId] = amount;
-        intentTypes[txId] = intentType;
-        intentTargets[txId] = targetAddress;
+        _state.arbitrumMessages[messageHash] = amount;
+        intentAmounts[messageHash] = amount;
+        intentTypes[messageHash] = intentType;
+        intentTargets[messageHash] = targetContract;
+        intentRecipients[messageHash] = recipient;
 
-        emit IntentProcessed(txId, intentType, targetAddress, amount);
+        emit IntentProcessed(messageHash, targetChain, targetContract, intentType, amount, recipient);
 
         bool success = _executeIntent(
-            txId,
+            messageHash,
             intentType,
-            targetAddress,
+            targetContract,
+            recipient,
             amount,
             payload
         );
-        emit IntentExecuted(txId, intentType, success);
+        emit IntentExecuted(messageHash, intentType, success);
     }
 
     function _executeIntent(
-        bytes32 txId,
+        bytes32 messageHash,
         IntentType intentType,
         address target,
+        address recipient,
         uint256 amount,
         bytes memory payload
     ) internal returns (bool) {
         if (intentType == IntentType.TRANSFER) {
-            return _handleTransfer(target, amount);
+            return _handleTransfer(recipient, amount);
         } else if (intentType == IntentType.SWAP) {
-            return _handleSwap(txId, target, amount, payload);
+            return _handleSwap(messageHash, target, amount, payload);
         } else if (intentType == IntentType.MULTISIG_EXECUTE) {
-            return _handleMultisigExecute(txId, target, payload);
+            return _handleMultisigExecute(messageHash, target, payload);
         } else if (intentType == IntentType.BRIDGE) {
-            return _handleBridge(txId, target, amount);
+            return _handleBridge(messageHash, recipient, amount);
         }
         return false;
     }
 
     function _handleTransfer(
-        address target,
+        address recipient,
         uint256 amount
     ) internal returns (bool) {
         if (amount > 0 && address(donationContract()) != address(0)) {
@@ -134,7 +151,7 @@ contract ArbitrumIntentVault is VaultGetters {
     }
 
     function _handleSwap(
-        bytes32 txId,
+        bytes32 messageHash,
         address target,
         uint256 amount,
         bytes memory payload
@@ -147,15 +164,15 @@ contract ArbitrumIntentVault is VaultGetters {
     }
 
     function _handleMultisigExecute(
-        bytes32 txId,
+        bytes32 messageHash,
         address target,
         bytes memory payload
     ) internal returns (bool) {
-        if (payload.length > 155 && target != address(0)) {
+        if (payload.length > 186 && target != address(0)) {
             bytes memory callData = BytesLib.slice(
                 payload,
-                155,
-                payload.length - 155
+                186,
+                payload.length - 186
             );
             (bool success, ) = target.call(callData);
             return success;
@@ -164,8 +181,8 @@ contract ArbitrumIntentVault is VaultGetters {
     }
 
     function _handleBridge(
-        bytes32 txId,
-        address target,
+        bytes32 messageHash,
+        address recipient,
         uint256 amount
     ) internal returns (bool) {
         if (amount > 0) {
@@ -176,15 +193,16 @@ contract ArbitrumIntentVault is VaultGetters {
     }
 
     function getIntentData(
-        bytes32 txId
+        bytes32 messageHash
     )
         external
         view
-        returns (uint256 amount, IntentType intentType, address target)
+        returns (uint256 amount, IntentType intentType, address target, address recipient)
     {
-        amount = intentAmounts[txId];
-        intentType = intentTypes[txId];
-        target = intentTargets[txId];
+        amount = intentAmounts[messageHash];
+        intentType = intentTypes[messageHash];
+        target = intentTargets[messageHash];
+        recipient = intentRecipients[messageHash];
     }
 
     function registerEmitter(
