@@ -14,8 +14,7 @@
     "gen-key": "node --loader ts-node/esm scripts/gen_keypair.ts",
     "deploy": "npx tsx scripts/deploy_multisig.ts",
     "deploy-accounts": "npx tsx scripts/deploy_accounts.ts",
-    "test-multisig-public": "npx tsx scripts/test_multisig_public.ts",
-    "test-multisig-private": "npx tsx scripts/test_multisig_private.ts",
+    "register-contract": "npx tsx scripts/register_contract.ts",
     "interaction-existing-contract": "node --loader ts-node/esm scripts/interaction_existing_contract.ts",
     "multiple-pxe": "node --loader ts-node/esm scripts/multiple_pxe.ts",
     "get-block": "node --loader ts-node/esm scripts/get_block.ts",
@@ -35,7 +34,12 @@
     "@aztec/noir-contracts.js": "2.0.2",
     "@aztec/protocol-contracts": "2.0.2",
     "@aztec/pxe": "2.0.2",
-    "@aztec/stdlib": "2.0.2"
+    "@aztec/stdlib": "2.0.2",
+    "chalk": "^5.6.2",
+    "commander": "^12.1.0",
+    "dotenv": "^16.6.1",
+    "ora": "^9.0.0",
+    "tsx": "^4.20.6"
   },
   "devDependencies": {
     "@types/jest": "^29.5.11",

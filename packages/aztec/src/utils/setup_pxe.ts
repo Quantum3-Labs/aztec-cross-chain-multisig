@@ -2,7 +2,7 @@ import { createPXEService, getPXEServiceConfig } from "@aztec/pxe/server";
 import { createAztecNodeClient, waitForPXE } from "@aztec/aztec.js";
 import { createStore } from "@aztec/kv-store/lmdb";
 
-const { NODE_URL = "http://localhost:8080" } = process.env;
+const { NODE_URL = "https://aztec-testnet-fullnode.zkv.xyz" } = process.env;
 
 const storeCache = new Map<string, Awaited<ReturnType<typeof createStore>>>();
 

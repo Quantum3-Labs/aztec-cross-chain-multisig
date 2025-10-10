@@ -52,10 +52,10 @@ async function main() {
       const existing = await pxe.getContractInstance(acctMgr.getAddress());
       if (!existing) {
         logger.info(`  Deploying ${acc.name} to blockchain...`);
-        await (await acctMgr.deploy({ fee })).wait({ timeout: 180000 });
+        await (await acctMgr.deploy({ fee })).wait({ timeout: 90000 });
         logger.info(`  ✓ Deployed: ${acctMgr.getAddress()}`);
-        logger.info(`  Waiting 20s for sync...`);
-        await sleep(20000);
+        logger.info(`  Waiting 10s for sync...`);
+        await sleep(10000);
       } else {
         logger.info(`  ✓ Already exists: ${acctMgr.getAddress()}`);
       }

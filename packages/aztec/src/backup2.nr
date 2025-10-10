@@ -30,7 +30,7 @@ pub contract PrivateMultisig {
         signer_pubkeys_x: Map<AztecAddress, PrivateMutable<ValueNote, Context>, Context>,
         signer_pubkeys_y: Map<AztecAddress, PrivateMutable<ValueNote, Context>, Context>,
         
-        // PRIVATE - Message approvals
+        // PRIVATE - Message approvals (FIXED: owner = contract address)
         message_approvals: Map<Field, PrivateSet<AddressNote, Context>, Context>,
         
         // PRIVATE - Executed intents tracking
@@ -174,6 +174,9 @@ pub contract PrivateMultisig {
     }
 
     // ========== SIGNER MANAGEMENT ==========
+    // CRITICAL FIX: All approval notes now emit to contract address (context.this_address())
+    // instead of caller, so ANY signer can read them during execution
+    
     #[private]
     fn add_signer(
         new_signer: AztecAddress,
@@ -213,7 +216,9 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            // CRITICAL FIX: Emit approval note to CONTRACT ADDRESS
+            // so that ANY signer can read it during execution
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -308,7 +313,8 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            // CRITICAL FIX: Emit to contract address
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -380,7 +386,8 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            // CRITICAL FIX: Emit to contract address
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -456,7 +463,8 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            // CRITICAL FIX: Emit to contract address
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -490,7 +498,8 @@ pub contract PrivateMultisig {
         let nullifier = poseidon2_hash([caller.to_field(), message_hash, signer_nonce as Field]);
         context.push_nullifier(nullifier);
 
-        let approval = AddressNote::new(caller, caller);
+        // CRITICAL FIX: Emit to contract address
+        let approval = AddressNote::new(caller, context.this_address());
         storage.message_approvals.at(message_hash).insert(approval).discard();
 
         let approval_count = count_approvals(message_hash, storage);
@@ -541,7 +550,8 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            // CRITICAL FIX: Emit to contract address
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -575,7 +585,8 @@ pub contract PrivateMultisig {
         let nullifier = poseidon2_hash([caller.to_field(), message_hash, signer_nonce as Field]);
         context.push_nullifier(nullifier);
 
-        let approval = AddressNote::new(caller, caller);
+        // CRITICAL FIX: Emit to contract address
+        let approval = AddressNote::new(caller, context.this_address());
         storage.message_approvals.at(message_hash).insert(approval).discard();
     }
 
@@ -643,7 +654,8 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            // CRITICAL FIX: Emit to contract address
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -677,7 +689,8 @@ pub contract PrivateMultisig {
         let nullifier = poseidon2_hash([caller.to_field(), message_hash, signer_nonce as Field]);
         context.push_nullifier(nullifier);
 
-        let approval = AddressNote::new(caller, caller);
+        // CRITICAL FIX: Emit to contract address
+        let approval = AddressNote::new(caller, context.this_address());
         storage.message_approvals.at(message_hash).insert(approval).discard();
     }
 

@@ -19,21 +19,36 @@ pub contract PrivateMultisig {
 
     #[storage]
     struct Storage<Context> {
-        message_approvals: Map<Field, PrivateSet<AddressNote, Context>, Context>,
-        signers: Map<AztecAddress, PrivateSet<ValueNote, Context>, Context>,
+        // PUBLIC - Signer status (who is a signer)
+        signer_status: Map<AztecAddress, PublicMutable<bool, Context>, Context>,
+        
+        // PUBLIC - Metadata
+        threshold: PublicMutable<Field, Context>,
+        signer_count: PublicMutable<Field, Context>,
+        
+        // PRIVATE - Signer public keys
         signer_pubkeys_x: Map<AztecAddress, PrivateMutable<ValueNote, Context>, Context>,
         signer_pubkeys_y: Map<AztecAddress, PrivateMutable<ValueNote, Context>, Context>,
-        threshold: PrivateMutable<ValueNote, Context>,
-        signer_count: PrivateMutable<ValueNote, Context>,
+        
+        // PRIVATE - Message approvals (owner = contract address)
+        message_approvals: Map<Field, PrivateSet<AddressNote, Context>, Context>,
+        
+        // PRIVATE - Executed intents tracking
         executed_intents: Map<Field, PrivateSet<ValueNote, Context>, Context>,
+        
+        // PUBLIC - Action approvals for AuthWit
         approved_actions: Map<Field, PublicMutable<bool, Context>, Context>,
+        
+        // PRIVATE - Wormhole contract
         wormhole_contract: PrivateMutable<AddressNote, Context>,
+        
+        // PUBLIC - Cross-chain nonce
         cross_chain_nonce: PublicMutable<u64, Context>,
     }
 
     #[contract_library_method]
     fn is_valid_impl(_context: &mut PrivateContext, outer_hash: Field) -> bool {
-        // Safety: get_auth_witness is required to retrieve signature from oracle
+        // Safety: get_auth_witness is required for AuthWit validation
         let witness: [Field; 64] = unsafe { get_auth_witness(outer_hash) };
         let mut signature: [u8; 64] = [0; 64];
         for i in 0..64 {
@@ -71,17 +86,6 @@ pub contract PrivateMultisig {
     }
 
     #[contract_library_method]
-    fn is_signer_active(address: AztecAddress, storage: Storage<&mut PrivateContext>) -> bool {
-        let notes = storage.signers.at(address).get_notes(NoteGetterOptions::new().set_limit(1));
-        
-        if notes.len() == 0 {
-            false
-        } else {
-            notes.get_unchecked(0).note.value() == 1
-        }
-    }
-
-    #[contract_library_method]
     fn count_approvals(
         message_hash: Field,
         storage: Storage<&mut PrivateContext>,
@@ -110,6 +114,7 @@ pub contract PrivateMultisig {
         found
     }
 
+    // ========== CONSTRUCTOR ==========
     #[private]
     fn constructor(
         initial_signer: AztecAddress,
@@ -122,35 +127,36 @@ pub contract PrivateMultisig {
         assert(!initial_signer.is_zero(), "Initial signer cannot be zero address");
         assert(!wormhole_address.is_zero(), "Wormhole address cannot be zero");
 
-        let signer_note = ValueNote::new(1, initial_signer);
-        storage.signers.at(initial_signer).insert(signer_note).discard();
-        
+        // Store PRIVATE data (pubkeys, wormhole)
         let pk_x_note = ValueNote::new(initial_signer_pk_x, initial_signer);
         storage.signer_pubkeys_x.at(initial_signer).initialize(pk_x_note).discard();
         
         let pk_y_note = ValueNote::new(initial_signer_pk_y, initial_signer);
         storage.signer_pubkeys_y.at(initial_signer).initialize(pk_y_note).discard();
 
-        let threshold_note = ValueNote::new(initial_threshold, initial_signer);
-        storage.threshold.initialize(threshold_note).discard();
-
-        let count_note = ValueNote::new(1, initial_signer);
-        storage.signer_count.initialize(count_note).discard();
-
         let wormhole_note = AddressNote::new(wormhole_address, initial_signer);
         storage.wormhole_contract.initialize(wormhole_note).discard();
 
+        // Enqueue public state initialization
         PrivateMultisig::at(context.this_address())
-            .initialize_cross_chain_nonce()
+            .initialize_public(initial_signer, initial_threshold)
             .enqueue(&mut context);
     }
 
+    // ========== INITIALIZE PUBLIC STATE ==========
     #[public]
-    #[internal]
-    fn initialize_cross_chain_nonce() {
+    fn initialize_public(initial_signer: AztecAddress, initial_threshold: Field) {
+        assert(storage.threshold.read() == 0, "Already initialized");
+        assert(initial_threshold as u32 > 0, "Threshold must be greater than 0");
+        assert(!initial_signer.is_zero(), "Initial signer cannot be zero");
+
+        storage.signer_status.at(initial_signer).write(true);
+        storage.threshold.write(initial_threshold);
+        storage.signer_count.write(1);
         storage.cross_chain_nonce.write(0);
     }
 
+    // ========== ACCOUNT ABSTRACTION ==========
     #[private]
     fn entrypoint(app: AppPayload, fee: FeePayload, cancellable: bool) {
         let actions = AccountActions::init(&mut context, is_valid_impl);
@@ -171,6 +177,8 @@ pub contract PrivateMultisig {
         assert(storage.approved_actions.at(action_hash).read(), "Action not approved");
     }
 
+    // ========== SIGNER MANAGEMENT ==========
+    
     #[private]
     fn add_signer(
         new_signer: AztecAddress,
@@ -186,7 +194,10 @@ pub contract PrivateMultisig {
         assert((new_signer_pk_x != 0) & (new_signer_pk_y != 0), "Invalid public key");
 
         let caller = context.msg_sender();
-        assert(is_signer_active(caller, storage), "Not a signer");
+        
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         let message_hash = poseidon2_hash([
             1 as Field,
@@ -207,7 +218,7 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -222,33 +233,49 @@ pub contract PrivateMultisig {
         new_signer_pk_y: Field,
     ) {
         let approval_count = count_approvals(message_hash, storage);
-        
-        let threshold_note = storage.threshold.get_note();
-        let threshold_value = threshold_note.note.value();
-        assert(approval_count >= threshold_value as u32, "Insufficient approvals");
 
-        assert(
-            storage.signers.at(new_signer).get_notes(NoteGetterOptions::new().set_limit(1)).len() == 0,
-            "Signer already exists",
-        );
+        PrivateMultisig::at(context.this_address())
+            ._execute_add_signer_public(
+                message_hash,
+                new_signer,
+                approval_count,
+            )
+            .enqueue(&mut context);
 
-        let signer_note = ValueNote::new(1, new_signer);
-        storage.signers.at(new_signer).insert(signer_note).discard();
-        
         let pk_x_note = ValueNote::new(new_signer_pk_x, new_signer);
         storage.signer_pubkeys_x.at(new_signer).initialize(pk_x_note).discard();
         
         let pk_y_note = ValueNote::new(new_signer_pk_y, new_signer);
         storage.signer_pubkeys_y.at(new_signer).initialize(pk_y_note).discard();
 
-        let old_count_note = storage.signer_count.get_note();
-        let old_count_value = old_count_note.note.value();
-        let new_count_value = old_count_value + 1;
-        
-        storage.signer_count.replace(ValueNote::new(new_count_value, context.msg_sender())).discard();
-
         let executed = ValueNote::new(1, context.msg_sender());
         storage.executed_intents.at(message_hash).insert(executed).discard();
+    }
+
+    #[internal]
+    #[public]
+    fn _execute_add_signer_public(
+        _message_hash: Field,
+        new_signer: AztecAddress,
+        approval_count: u32,
+    ) {
+        let threshold = storage.threshold.read() as u32;
+        assert(approval_count >= threshold, "Insufficient approvals");
+
+        let is_already_signer = storage.signer_status.at(new_signer).read();
+        assert(!is_already_signer, "Already a signer");
+
+        storage.signer_status.at(new_signer).write(true);
+        
+        let old_count = storage.signer_count.read();
+        storage.signer_count.write(old_count + 1);
+    }
+
+    #[internal]
+    #[public]
+    fn _verify_is_signer(address: AztecAddress) {
+        let is_signer = storage.signer_status.at(address).read();
+        assert(is_signer, "Not a signer");
     }
 
     #[private]
@@ -262,7 +289,10 @@ pub contract PrivateMultisig {
     ) -> Field {
         let caller = context.msg_sender();
         assert(caller != target_signer, "Cannot remove yourself");
-        assert(is_signer_active(caller, storage), "Not a signer");
+
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         let message_hash = poseidon2_hash([
             2 as Field,
@@ -283,7 +313,7 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -293,27 +323,32 @@ pub contract PrivateMultisig {
     #[private]
     fn execute_remove_signer(message_hash: Field, target_signer: AztecAddress) {
         let approval_count = count_approvals(message_hash, storage);
-        
-        let threshold_note = storage.threshold.get_note();
-        let threshold_value = threshold_note.note.value();
-        assert(approval_count >= threshold_value as u32, "Insufficient approvals");
 
-        let _old = storage.signers.at(target_signer).pop_notes(NoteGetterOptions::new().set_limit(1));
-        
-        let inactive_note = ValueNote::new(0, target_signer);
-        storage.signers.at(target_signer).insert(inactive_note).discard();
-
-        let old_count_note = storage.signer_count.get_note();
-        let old_count_value = old_count_note.note.value();
-        let new_count_value = old_count_value - 1;
-        
-        assert(new_count_value as u32 >= threshold_value as u32, "Would break threshold");
-        
-        storage.signer_count.replace(ValueNote::new(new_count_value, context.msg_sender())).discard();
-        storage.signer_count.initialize(ValueNote::new(new_count_value, context.msg_sender())).discard();
+        PrivateMultisig::at(context.this_address())
+            ._execute_remove_signer_public(message_hash, target_signer, approval_count)
+            .enqueue(&mut context);
 
         let executed = ValueNote::new(1, context.msg_sender());
         storage.executed_intents.at(message_hash).insert(executed).discard();
+    }
+
+    #[internal]
+    #[public]
+    fn _execute_remove_signer_public(
+        _message_hash: Field,
+        target_signer: AztecAddress,
+        approval_count: u32,
+    ) {
+        let threshold = storage.threshold.read() as u32;
+        assert(approval_count >= threshold, "Insufficient approvals");
+
+        storage.signer_status.at(target_signer).write(false);
+        
+        let old_count = storage.signer_count.read();
+        let new_count = old_count - 1;
+        
+        assert(new_count as u32 >= threshold, "Would break threshold");
+        storage.signer_count.write(new_count);
     }
 
     #[private]
@@ -326,7 +361,10 @@ pub contract PrivateMultisig {
         deadline: u64,
     ) -> Field {
         let caller = context.msg_sender();
-        assert(is_signer_active(caller, storage), "Not a signer");
+        
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         let message_hash = poseidon2_hash([
             3 as Field,
@@ -347,7 +385,7 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -357,22 +395,33 @@ pub contract PrivateMultisig {
     #[private]
     fn execute_change_threshold(message_hash: Field, new_threshold: Field) {
         let approval_count = count_approvals(message_hash, storage);
-        
-        let old_threshold_note = storage.threshold.get_note();
-        let old_threshold_value = old_threshold_note.note.value();
-        assert(approval_count >= old_threshold_value as u32, "Insufficient approvals");
 
-        let count_note = storage.signer_count.get_note();
-        let count_value = count_note.note.value();
-        assert(new_threshold as u32 <= count_value as u32, "Threshold exceeds signers");
-        assert(new_threshold as u32 > 0, "Threshold must be > 0");
-
-        storage.threshold.replace(ValueNote::new(new_threshold, context.msg_sender())).discard();
+        PrivateMultisig::at(context.this_address())
+            ._execute_change_threshold_public(message_hash, new_threshold, approval_count)
+            .enqueue(&mut context);
 
         let executed = ValueNote::new(1, context.msg_sender());
         storage.executed_intents.at(message_hash).insert(executed).discard();
     }
 
+    #[internal]
+    #[public]
+    fn _execute_change_threshold_public(
+        _message_hash: Field,
+        new_threshold: Field,
+        approval_count: u32,
+    ) {
+        let old_threshold = storage.threshold.read() as u32;
+        assert(approval_count >= old_threshold, "Insufficient approvals");
+
+        let signer_count = storage.signer_count.read() as u32;
+        assert(new_threshold as u32 <= signer_count, "Threshold exceeds signers");
+        assert(new_threshold as u32 > 0, "Threshold must be > 0");
+
+        storage.threshold.write(new_threshold);
+    }
+
+    // ========== TRANSACTION MANAGEMENT ==========
     #[private]
     fn propose_transaction(
         to: AztecAddress,
@@ -388,7 +437,10 @@ pub contract PrivateMultisig {
         assert(!to.is_zero(), "Invalid destination address");
 
         let caller = context.msg_sender();
-        assert(is_signer_active(caller, storage), "Not a signer");
+        
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         let message_hash = poseidon2_hash([
             5 as Field,
@@ -409,7 +461,7 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -425,7 +477,10 @@ pub contract PrivateMultisig {
         signer_pk_y: Field,
     ) -> bool {
         let caller = context.msg_sender();
-        assert(is_signer_active(caller, storage), "Not a signer");
+        
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         assert(
             !is_already_approved(message_hash, caller, storage),
@@ -440,21 +495,22 @@ pub contract PrivateMultisig {
         let nullifier = poseidon2_hash([caller.to_field(), message_hash, signer_nonce as Field]);
         context.push_nullifier(nullifier);
 
-        let approval = AddressNote::new(caller, caller);
+        let approval = AddressNote::new(caller, context.this_address());
         storage.message_approvals.at(message_hash).insert(approval).discard();
 
         let approval_count = count_approvals(message_hash, storage);
         
-        let threshold_note = storage.threshold.get_note();
-        let threshold_value = threshold_note.note.value();
-        let threshold_reached = approval_count >= threshold_value as u32;
-        
-        if threshold_reached {
-            let executed = ValueNote::new(1, context.msg_sender());
-            storage.executed_intents.at(message_hash).insert(executed).discard();
-        }
+        PrivateMultisig::at(context.this_address())
+            ._check_and_mark_executed(message_hash, approval_count)
+            .enqueue(&mut context);
 
-        threshold_reached
+        true
+    }
+
+    #[internal]
+    #[public]
+    fn _check_and_mark_executed(_message_hash: Field, _approval_count: u32) {
+        // No-op
     }
 
     #[private]
@@ -468,7 +524,10 @@ pub contract PrivateMultisig {
         deadline: u64,
     ) -> Field {
         let caller = context.msg_sender();
-        assert(is_signer_active(caller, storage), "Not a signer");
+        
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         let message_hash = poseidon2_hash([
             4 as Field,
@@ -487,7 +546,7 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -503,7 +562,10 @@ pub contract PrivateMultisig {
         signer_pk_y: Field,
     ) {
         let caller = context.msg_sender();
-        assert(is_signer_active(caller, storage), "Not a signer");
+        
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         assert(
             !is_already_approved(message_hash, caller, storage),
@@ -518,20 +580,16 @@ pub contract PrivateMultisig {
         let nullifier = poseidon2_hash([caller.to_field(), message_hash, signer_nonce as Field]);
         context.push_nullifier(nullifier);
 
-        let approval = AddressNote::new(caller, caller);
+        let approval = AddressNote::new(caller, context.this_address());
         storage.message_approvals.at(message_hash).insert(approval).discard();
     }
 
     #[private]
     fn finalize_action(message_hash: Field, action_hash: Field) {
         let approval_count = count_approvals(message_hash, storage);
-        
-        let threshold_note = storage.threshold.get_note();
-        let threshold_value = threshold_note.note.value();
-        assert(approval_count >= threshold_value as u32, "Insufficient approvals");
 
         PrivateMultisig::at(context.this_address())
-            ._set_action_approved(action_hash)
+            ._finalize_action_public(message_hash, action_hash, approval_count)
             .enqueue(&mut context);
 
         let executed = ValueNote::new(1, context.msg_sender());
@@ -540,10 +598,14 @@ pub contract PrivateMultisig {
 
     #[internal]
     #[public]
-    fn _set_action_approved(action_hash: Field) {
+    fn _finalize_action_public(_message_hash: Field, action_hash: Field, approval_count: u32) {
+        let threshold = storage.threshold.read() as u32;
+        assert(approval_count >= threshold, "Insufficient approvals");
+        
         storage.approved_actions.at(action_hash).write(true);
     }
 
+    // ========== CROSS-CHAIN WITH WORMHOLE ==========
     #[private]
     fn propose_cross_chain_intent(
         target_chain: Field,
@@ -561,7 +623,10 @@ pub contract PrivateMultisig {
         assert(!recipient.is_zero(), "Invalid recipient");
 
         let caller = context.msg_sender();
-        assert(is_signer_active(caller, storage), "Not a signer");
+        
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         let message_hash = poseidon2_hash([
             6 as Field,
@@ -583,7 +648,7 @@ pub contract PrivateMultisig {
         context.push_nullifier(nullifier);
 
         if !is_already_approved(message_hash, caller, storage) {
-            let approval = AddressNote::new(caller, caller);
+            let approval = AddressNote::new(caller, context.this_address());
             storage.message_approvals.at(message_hash).insert(approval).discard();
         }
 
@@ -599,7 +664,10 @@ pub contract PrivateMultisig {
         signer_pk_y: Field,
     ) {
         let caller = context.msg_sender();
-        assert(is_signer_active(caller, storage), "Not a signer");
+        
+        PrivateMultisig::at(context.this_address())
+            ._verify_is_signer(caller)
+            .enqueue(&mut context);
 
         assert(
             !is_already_approved(message_hash, caller, storage),
@@ -614,7 +682,7 @@ pub contract PrivateMultisig {
         let nullifier = poseidon2_hash([caller.to_field(), message_hash, signer_nonce as Field]);
         context.push_nullifier(nullifier);
 
-        let approval = AddressNote::new(caller, caller);
+        let approval = AddressNote::new(caller, context.this_address());
         storage.message_approvals.at(message_hash).insert(approval).discard();
     }
 
@@ -628,10 +696,10 @@ pub contract PrivateMultisig {
         recipient: AztecAddress,
     ) {
         let approval_count = count_approvals(message_hash, storage);
-        
-        let threshold_note = storage.threshold.get_note();
-        let threshold_value = threshold_note.note.value();
-        assert(approval_count >= threshold_value as u32, "Insufficient approvals");
+
+        PrivateMultisig::at(context.this_address())
+            ._verify_threshold(approval_count)
+            .enqueue(&mut context);
 
         let executed = storage.executed_intents.at(message_hash).get_notes(NoteGetterOptions::new());
         assert(executed.len() == 0, "Already executed");
@@ -640,43 +708,64 @@ pub contract PrivateMultisig {
         let wormhole_addr = wormhole_note.note.get_address();
         assert(!wormhole_addr.is_zero(), "Wormhole not configured");
 
+        // Construct payload: 8 Fields x 31 bytes = 248 bytes
+        // [action=6, target_chain, target_contract, intent_type, amount, recipient, nonce, deadline]
         let mut payload: [[u8; 31]; 8] = [[0; 31]; 8];
         
-        let message_hash_bytes = message_hash.to_be_bytes::<32>();
+        // Field 0: action = 6
+        let action_bytes = (6 as Field).to_be_bytes::<32>();
         for i in 0..31 {
-            payload[0][i] = message_hash_bytes[i + 1];
+            payload[0][i] = action_bytes[i + 1];
         }
         
+        // Field 1: target_chain
         let target_chain_bytes = target_chain.to_be_bytes::<32>();
         for i in 0..31 {
             payload[1][i] = target_chain_bytes[i + 1];
         }
         
+        // Field 2: target_contract
         let target_contract_bytes = target_contract.to_field().to_be_bytes::<32>();
         for i in 0..31 {
             payload[2][i] = target_contract_bytes[i + 1];
         }
         
+        // Field 3: intent_type
         let intent_type_bytes = intent_type.to_be_bytes::<32>();
         for i in 0..31 {
             payload[3][i] = intent_type_bytes[i + 1];
         }
         
+        // Field 4: amount
         let amount_bytes = amount.to_be_bytes::<32>();
         for i in 0..31 {
             payload[4][i] = amount_bytes[i + 1];
         }
         
+        // Field 5: recipient
         let recipient_bytes = recipient.to_field().to_be_bytes::<32>();
         for i in 0..31 {
             payload[5][i] = recipient_bytes[i + 1];
         }
+        
+        // Field 6: nonce (0 for now)
+        let nonce: Field = 0;
+        let nonce_bytes = nonce.to_be_bytes::<32>();
+        for i in 0..31 {
+            payload[6][i] = nonce_bytes[i + 1];
+        }
+        
+        // Field 7: deadline (0 for now)
+        let deadline: Field = 0;
+        let deadline_bytes = deadline.to_be_bytes::<32>();
+        for i in 0..31 {
+            payload[7][i] = deadline_bytes[i + 1];
+        }
 
-        let nonce = 0;
-
+        // Publish to Wormhole
         Wormhole::at(wormhole_addr)
             .publish_message_in_private(
-                nonce,
+                0,
                 payload,
                 0,
                 1,
@@ -695,9 +784,28 @@ pub contract PrivateMultisig {
 
     #[internal]
     #[public]
+    fn _verify_threshold(approval_count: u32) {
+        let threshold = storage.threshold.read() as u32;
+        assert(approval_count >= threshold, "Insufficient approvals");
+    }
+
+    #[internal]
+    #[public]
     fn _increment_cross_chain_nonce() {
         let nonce = storage.cross_chain_nonce.read();
         storage.cross_chain_nonce.write(nonce + 1);
+    }
+
+    // ========== PUBLIC VIEW FUNCTIONS ==========
+
+    #[public]
+    fn get_threshold() -> pub Field {
+        storage.threshold.read()
+    }
+
+    #[public]
+    fn get_signer_count() -> pub Field {
+        storage.signer_count.read()
     }
 
     #[public]
@@ -710,21 +818,22 @@ pub contract PrivateMultisig {
         storage.approved_actions.at(action_hash).read()
     }
 
-    #[private]
-    fn is_signer(address: AztecAddress) -> bool {
-        is_signer_active(address, storage)
+    #[public]
+    fn is_signer(address: AztecAddress) -> pub bool {
+        storage.signer_status.at(address).read()
     }
 
-    #[private]
-    fn get_threshold() -> Field {
-        let note = storage.threshold.get_note();
-        note.note.value()
-    }
+    // ========== PRIVATE VIEW FUNCTIONS ==========
 
     #[private]
-    fn get_signer_count() -> Field {
-        let note = storage.signer_count.get_note();
-        note.note.value()
+    fn get_signer_pubkey(signer: AztecAddress) -> (Field, Field) {
+        let pk_x_note = storage.signer_pubkeys_x.at(signer).get_note();
+        let pk_x = pk_x_note.note.value();
+        
+        let pk_y_note = storage.signer_pubkeys_y.at(signer).get_note();
+        let pk_y = pk_y_note.note.value();
+        
+        (pk_x, pk_y)
     }
 
     #[private]
@@ -736,16 +845,5 @@ pub contract PrivateMultisig {
     fn is_executed(message_hash: Field) -> bool {
         let executed = storage.executed_intents.at(message_hash).get_notes(NoteGetterOptions::new());
         executed.len() > 0
-    }
-
-    #[private]
-    fn get_signer_pubkey(signer: AztecAddress) -> (Field, Field) {
-        let pk_x_note = storage.signer_pubkeys_x.at(signer).get_note();
-        let pk_x = pk_x_note.note.value();
-        
-        let pk_y_note = storage.signer_pubkeys_y.at(signer).get_note();
-        let pk_y = pk_y_note.note.value();
-        
-        (pk_x, pk_y)
     }
 }
