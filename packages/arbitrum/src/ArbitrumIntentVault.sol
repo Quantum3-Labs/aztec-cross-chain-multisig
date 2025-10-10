@@ -143,9 +143,12 @@ contract ArbitrumIntentVault is VaultGetters {
         address recipient,
         uint256 amount
     ) internal returns (bool) {
-        if (amount > 0 && address(donationContract()) != address(0)) {
-            donationContract().donate(amount);
-            return true;
+        if (amount > 0 && address(donationContract()) != address(0) && recipient != address(0)) {
+            // Call processWithdrawal to transfer real tokens
+            (bool success, ) = address(donationContract()).call(
+                abi.encodeWithSignature("processWithdrawal(address,uint256)", recipient, amount)
+            );
+            return success;
         }
         return false;
     }
