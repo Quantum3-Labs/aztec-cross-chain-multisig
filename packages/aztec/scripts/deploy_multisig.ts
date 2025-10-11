@@ -1,3 +1,4 @@
+// scripts/deploy_multisig.ts
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
@@ -20,10 +21,6 @@ async function derivePublicKey(privateKey: GrumpkinScalar): Promise<Point> {
   return grumpkin.mul(grumpkin.generator(), privateKey);
 }
 
-function pointToFr(p: Point): { x: Fr; y: Fr } {
-  return { x: Fr.fromString(p.x.toString()), y: Fr.fromString(p.y.toString()) };
-}
-
 async function waitInstance(pxe: any, addr: AztecAddress, label: string) {
   let inst = await pxe.getContractInstance(addr);
   for (let i = 0; i < 20 && !inst; i++) {
@@ -39,65 +36,59 @@ async function main() {
 
   try {
     logger.info("===============================================================================");
-    logger.info("🚀 DEPLOYING HYBRID MULTISIG CONTRACT (Aztec v2.0.2)");
+    logger.info("🚀 DEPLOYING PrivateMultisig (Aztec v2.0.2) WITH WORMHOLE");
     logger.info("===============================================================================");
 
+    // PXE
     const pxe = await setupPXE();
     await waitForPXE(pxe);
     logger.info("✓ Connected to PXE");
 
-    // Sponsored FPC (fee sponsor)
+    // Sponsored FPC
     const sponsoredFPC = await getSponsoredFPCInstance();
     await pxe.registerContract({ instance: sponsoredFPC, artifact: SponsoredFPCContract.artifact });
     const fee = { paymentMethod: new SponsoredFeePaymentMethod(sponsoredFPC.address) };
     logger.info("✓ Registered SponsoredFPC");
 
-    // Deployer account
+    // Keys
     const secretKey = toFr(process.env.SECRET_KEY!);
     const salt = toFr(process.env.SALT!);
     const deployerPrivKey = toScalar(process.env.PRIV_DEPLOYER!);
+    const signer1PrivKey = toScalar(process.env.PRIV1!);
 
-    logger.info("📝 Setting up deployer account...");
+    // Deployer account
     const deployerAcctMgr = await getSchnorrAccount(pxe, secretKey, deployerPrivKey, salt);
     await deployerAcctMgr.register();
     const deployerWallet = await deployerAcctMgr.getWallet();
     const deployerAddress = deployerAcctMgr.getAddress();
     logger.info(`✓ Deployer ready: ${deployerAddress.toString()}`);
 
-    // Initial signer account
-    const signer1PrivKey = toScalar(process.env.PRIV1!);
-    const signer1PubPoint = await derivePublicKey(signer1PrivKey);
-    const signer1Pub = pointToFr(signer1PubPoint);
-
-    logger.info("📝 Setting up initial signer account...");
+    // Initial signer account + pubkey
     const signer1AcctMgr = await getSchnorrAccount(pxe, secretKey, signer1PrivKey, salt);
     await signer1AcctMgr.register();
     const signer1Wallet = await signer1AcctMgr.getWallet();
     const signer1Address = signer1AcctMgr.getAddress();
-    logger.info(`✓ Initial Signer ready: ${signer1Address.toString()}`);
-    logger.info(`  Public Key X: ${signer1Pub.x.toString()}`);
-    logger.info(`  Public Key Y: ${signer1Pub.y.toString()}`);
+    const signer1Pub = await derivePublicKey(signer1PrivKey);
+    const signer1PubX = Fr.fromString(signer1Pub.x.toString());
+    const signer1PubY = Fr.fromString(signer1Pub.y.toString());
+    logger.info(`✓ Initial signer: ${signer1Address.toString()}`);
+    logger.info(`  PubKey X: ${signer1PubX.toString()}`);
+    logger.info(`  PubKey Y: ${signer1PubY.toString()}`);
 
-    // Wormhole address
+    // Wormhole address on Aztec
     const wormholeAddress = AztecAddress.fromString(process.env.WORMHOLE_ADDRESS!);
-    logger.info(`✓ Wormhole: ${wormholeAddress.toString()}`);
+    logger.info(`✓ Wormhole core: ${wormholeAddress.toString()}`);
 
     const initialThreshold = Fr.fromString("1");
-    logger.info(`✓ Initial Threshold: ${initialThreshold.toString()}`);
 
-    // ========================================================================
-    // STEP 1: Deploy contract (constructor enqueues initialize_public)
-    // ========================================================================
-    logger.info("\n📦 Deploying PrivateMultisig...");
-    logger.info("This may take several minutes for proof generation...");
-    
+    // Deploy with private constructor
+    logger.info("\n📦 Deploying PrivateMultisig (private constructor)...");
     const deployTx = PrivateMultisigContract.deploy(
       deployerWallet,
       signer1Address,
-      signer1Pub.x,
-      signer1Pub.y,
-      initialThreshold,
-      wormholeAddress
+      signer1PubX,
+      signer1PubY,
+      initialThreshold
     ).send({ from: deployerAddress, fee });
 
     logger.info("⏳ Waiting for deployment transaction...");
@@ -108,62 +99,55 @@ async function main() {
     const multisigAddress = contract.address;
     logger.info(`✅ Contract deployed at ${multisigAddress.toString()}`);
 
-    // Wait PXE instance & register artifact
-    logger.info("\n⏳ Waiting for multisig instance in PXE...");
+    // Register with PXE
+    logger.info("\n⏳ Waiting for PXE instance...");
     const multisigInstance = await waitInstance(pxe, multisigAddress, "PrivateMultisig");
     await pxe.registerContract({ instance: multisigInstance, artifact: PrivateMultisigContract.artifact });
     logger.info("✓ Multisig registered with PXE");
 
-    // ========================================================================
-    // STEP 2: MANUALLY call initialize_public (enqueued call didn't execute)
-    // ========================================================================
-    logger.info("\n📦 Manually initializing public state...");
-    
-    try {
-      const initTx = await contract.withWallet(deployerWallet).methods
-        .initialize_public(signer1Address, initialThreshold)
+    // Verify public state (constructor enqueues initialization)
+    logger.info("\n🔍 Verifying public state...");
+    await sleep(4000);
+    const withDeployer = contract.withWallet(deployerWallet);
+    let thresholdVal = await withDeployer.methods.get_threshold().simulate({ from: deployerAddress });
+    let signerCountVal = await withDeployer.methods.get_signer_count().simulate({ from: deployerAddress });
+
+    if (thresholdVal.toString() === "0" || signerCountVal.toString() === "0") {
+      logger.info("Public state not initialized yet. Initializing now...");
+      await withDeployer.methods
+        .initialize_public_state(initialThreshold, Fr.fromString("1"))
         .send({ from: deployerAddress, fee })
         .wait({ timeout: 300_000 });
-      
-      logger.info(`✓ Public state initialized: ${initTx.txHash}`);
-    } catch (err: any) {
-      if (err.message && err.message.includes("Already initialized")) {
-        logger.info("✓ Public state already initialized by constructor");
-      } else {
-        throw err;
-      }
+      await withDeployer.methods
+        ._initialize_signer_status(signer1Address)
+        .send({ from: deployerAddress, fee })
+        .wait({ timeout: 300_000 });
+
+      thresholdVal = await withDeployer.methods.get_threshold().simulate({ from: deployerAddress });
+      signerCountVal = await withDeployer.methods.get_signer_count().simulate({ from: deployerAddress });
     }
 
-    // ========================================================================
-    // STEP 3: Verify state
-    // ========================================================================
-    logger.info("\n🔍 Verifying contract state...");
-    logger.info("⏳ Waiting for state sync (30s)...");
-    await sleep(30_000);
-    
-    try {
-      const withDeployer = contract.withWallet(deployerWallet);
+    logger.info(`  Threshold: ${thresholdVal.toString()}`);
+    logger.info(`  Signer Count: ${signerCountVal.toString()}`);
 
-      const thresholdVal = await withDeployer.methods.get_threshold().simulate({ from: deployerAddress });
-      const signerCountVal = await withDeployer.methods.get_signer_count().simulate({ from: deployerAddress });
-      const isSignerVal = await withDeployer.methods.is_signer(signer1Address).simulate({ from: deployerAddress });
-      const nonceVal = await withDeployer.methods.get_cross_chain_nonce().simulate({ from: deployerAddress });
+    // (Optional) prove who is signer for sanity
+    const isDeployerSigner = await withDeployer.methods.is_signer_public(deployerAddress).simulate({ from: deployerAddress });
+    const isSigner1Signer = await withDeployer.methods.is_signer_public(signer1Address).simulate({ from: deployerAddress });
+    logger.info(`  isDeployerSigner=${isDeployerSigner}, isSigner1Signer=${isSigner1Signer}`);
 
-      logger.info(`  Threshold: ${thresholdVal.toString()}`);
-      logger.info(`  Signer Count: ${signerCountVal.toString()}`);
-      logger.info(`  Signer1 active: ${isSignerVal.toString()}`);
-      logger.info(`  Cross-chain nonce: ${nonceVal.toString()}`);
+    // Set Wormhole address: MUST be called by a signer (signer1)
+    logger.info("\n🔧 Setting Wormhole address on contract (by signer1)...");
+    await contract
+      .withWallet(signer1Wallet)
+      .methods
+      .set_wormhole_address(wormholeAddress)
+      .send({ from: signer1Address, fee })
+      .wait({ timeout: 300_000 });
+    logger.info("✓ Wormhole address set");
 
-      if (thresholdVal.toString() === "1" && signerCountVal.toString() === "1" && isSignerVal) {
-        logger.info("✅ Public state initialized correctly!");
-      } else {
-        logger.warn("⚠️  Public state values unexpected - wait another minute and verify with: npm run info");
-      }
-    } catch (err: any) {
-      logger.warn("⚠️  Could not verify state immediately (this is normal)");
-      logger.warn(`   Error: ${err.message}`);
-      logger.warn("   Wait 1-2 minutes and verify with: npm run info");
-    }
+    // Read nonce
+    const nonceVal = await withDeployer.methods.get_cross_chain_nonce().simulate({ from: deployerAddress });
+    logger.info(`  Cross-chain nonce: ${nonceVal.toString()}`);
 
     // Update .env
     logger.info("\n💾 Updating .env file...");
@@ -190,17 +174,10 @@ async function main() {
     logger.info("===============================================================================");
     logger.info(`Contract Address: ${multisigAddress.toString()}`);
     logger.info(`Deployer Address: ${deployerAddress.toString()}`);
-    logger.info(`Initial Signer: ${signer1Address.toString()}`);
+    logger.info(`Initial Signer:  ${signer1Address.toString()}`);
     logger.info(`Initial Threshold: ${initialThreshold.toString()}`);
     logger.info(`Wormhole Address: ${wormholeAddress.toString()}`);
     logger.info("===============================================================================");
-    
-    logger.info("\n📝 Next steps:");
-    logger.info("1. Wait 1-2 minutes for PXE to fully sync notes");
-    logger.info("2. Verify state: npm run info");
-    logger.info("3. Add signer: npx tsx cli/index.ts add-signer --new-signer 2");
-    logger.info("\n⚠️  NOTE: If 'npm run info' shows incorrect values, wait another minute and retry.");
-
   } catch (err) {
     console.error("\n❌ DEPLOYMENT FAILED");
     console.error("===============================================================================");
