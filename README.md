@@ -1,6 +1,6 @@
 ## Aztec cross-chain multisig to interact with Arbitrum
 
-**Monorepo for Q3x demo app**
+**Monorepo for demo app**
 
 Consists of
 
