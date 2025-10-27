@@ -1,0 +1,9 @@
+[submodule "arbitrum-contracts/lib/openzeppelin-contracts"]
+	path = arbitrum-contracts/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "arbitrum-contracts/lib/wormhole-solidity-sdk"]
+	path = arbitrum-contracts/lib/wormhole-solidity-sdk
+	url = https://github.com/wormhole-foundation/wormhole-solidity-sdk
+[submodule "arbitrum-contracts/lib/forge-std"]
+	path = arbitrum-contracts/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

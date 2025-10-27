@@ -1,0 +1,30 @@
+{
+  "name": "multisig-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "multisig": "./cli.js"
+  },
+  "scripts": {
+    "build": "cd ./aztec-contracts && aztec-nargo fmt && aztec-nargo compile && aztec-postprocess-contract && aztec codegen -o src/artifacts target",
+    "dev": "tsx cli/index.ts",
+    "fmt": "cd ./aztec-contracts && aztec-nargo fmt",
+    "compile": "cd ./aztec-contracts && aztec-nargo fmt && aztec-nargo compile"
+  },
+  "dependencies": {
+    "@aztec/aztec.js": "2.0.3",
+    "@aztec/kv-store": "2.0.3",
+    "@aztec/accounts": "^2.0.3",
+    "@aztec/noir-contracts.js": "^2.0.3",
+    "@aztec/pxe": "^2.0.3",
+    "@aztec/stdlib": "^2.0.3",
+    "@types/node": "^24.7.2",
+    "chalk": "^5.6.2",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.5",
+    "ora": "^9.0.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
