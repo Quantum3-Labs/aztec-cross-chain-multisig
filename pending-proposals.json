@@ -1,51 +1,22 @@
 [
   {
-    "id": "add_signer-1761552608875",
-    "type": "add_signer",
-    "messageHash": "0x1f493a50b33b1fbeed463680ec31467d1e11a0e4744198e96832fc5e23b70586",
+    "id": "cross_chain_intent-1761554459066",
+    "type": "cross_chain_intent",
+    "messageHash": "0x008070a37c9c2ba7396390737f3b511c5820746df9aa9eef27ec2df12dc55d03",
     "multisigName": "company",
-    "multisigAddress": "0x12dd36685862d2669954e6add5b1fe1288447c786835ad21c3d3f1437d985df9",
+    "multisigAddress": "0x11e22bdad63e91d6f5f035c8f9cf96776e674b2615882255d2122a59f396584d",
     "threshold": 1,
     "currentSignerCount": 2,
     "proposer": "a",
-    "createdAt": "2025-10-27T08:10:08.875Z",
+    "createdAt": "2025-10-27T08:40:59.066Z",
     "status": "executed",
     "data": {
-      "newSignerName": "c",
-      "newSignerAddress": "0x1674125aaea42526106d289ed4021035ebe0f0d57c34a89d2ad748606ee64cad",
-      "newSignerPublicKeyX": "0x1c2f463840c0fd113ad643ccd823fb2706aa730403cd89b59f0d9aa09c7dc45c",
-      "newSignerPublicKeyY": "0x205c2492ec2cda8a90df7dab600aadd78f4e5d4332d0a7e36c2ff60ffcf806a0"
-    }
-  },
-  {
-    "id": "change_threshold-1761552666373",
-    "type": "change_threshold",
-    "messageHash": "0x0c6e472c018f1d7faf2e651c631c02d1c2c773c429ca45fcf12de2d3b1a0af71",
-    "multisigName": "company",
-    "multisigAddress": "0x12dd36685862d2669954e6add5b1fe1288447c786835ad21c3d3f1437d985df9",
-    "threshold": 1,
-    "currentSignerCount": 3,
-    "proposer": "a",
-    "createdAt": "2025-10-27T08:11:06.373Z",
-    "status": "executed",
-    "data": {
-      "newThreshold": 2
-    }
-  },
-  {
-    "id": "remove_signer-1761552716213",
-    "type": "remove_signer",
-    "messageHash": "0x27b488307b955f96b818141e2b81ea36fffa44522ae9aad7078f3bdcedbd4036",
-    "multisigName": "company",
-    "multisigAddress": "0x12dd36685862d2669954e6add5b1fe1288447c786835ad21c3d3f1437d985df9",
-    "threshold": 2,
-    "currentSignerCount": 3,
-    "proposer": "a",
-    "createdAt": "2025-10-27T08:11:56.213Z",
-    "status": "executed",
-    "data": {
-      "targetSignerName": "c",
-      "targetSignerAddress": "0x1674125aaea42526106d289ed4021035ebe0f0d57c34a89d2ad748606ee64cad"
+      "targetChain": "421614",
+      "targetContract": "0xd95D3C798908a2545D5848695d6f88F3839b7573",
+      "intentType": "1",
+      "amount": "10",
+      "recipient": "0x35340673E33eF796B9a2d00dB8B6A549205aabe4",
+      "deadline": "1761640858"
     }
   }
 ]

@@ -177,7 +177,7 @@ export async function createProposal(
     case "cross_chain_intent":
       const crossChainData = data as CrossChainIntentData;
       messageHash = await poseidon2Hash([
-        Fr.fromString("6"), // Action type: cross chain intent
+        Fr.fromString("1"), // Action type: cross chain intent
         Fr.fromString(crossChainData.targetChain),
         Fr.fromString(crossChainData.targetContract),
         Fr.fromString(crossChainData.intentType),

@@ -1,26 +1,18 @@
 [
   {
     "name": "a",
-    "address": "0x0dd87e8c034cd11cceb241fe000b3f353bb8bae4bfe2762b46b01fce186499a8",
-    "privateKey": "0x1e4de8406cf68d9ea0f57a535025cbe16f4d532d684474e44f2ce5921e0d24e2",
-    "publicKeyX": "0x0a08cfa8c49afdc31abddc4a0be85afdeaa17d19aef0ffde686c7810effdb65b",
-    "publicKeyY": "0x27fb98dfe56218af2c939fd24e430c952575dca99957c034c7fba82fdc54f2f7",
-    "createdAt": "2025-10-27T08:03:26.104Z"
+    "address": "0x06c53e797363c0990cba5c0d8f60bac36829cfb5eee70a59c44d7bcb10a6347a",
+    "privateKey": "0x172fc182f77488fb10ef308cbf43abea154eb98d20c4f3b5ad4025ca55dba150",
+    "publicKeyX": "0x0fc3ab78e68fa712e33b1786a4b6072134690c28664bd9bef9d6124da84d8679",
+    "publicKeyY": "0x259c7b7cbb8044484863eab39ccc1b1857fd81ff629b1bac61aef1c0affa54e2",
+    "createdAt": "2025-10-27T08:32:32.550Z"
   },
   {
     "name": "b",
-    "address": "0x0941265c9346e16722c5ca069775dc8d23c8f23882b5b6bf57aaeb8e23baaf49",
-    "privateKey": "0x11bf207b07b9a0b38a2de9b5bc33e09b8a0c7e55688fa45aee642f63f952975e",
-    "publicKeyX": "0x293dfd45c1ce00339067de3f8c6c4af3dc2f8b88824f8b315aa0cc9b25e9f8bd",
-    "publicKeyY": "0x0df26ba3c5726e149dc7b9dd7aab256df9654612fa50738aca188c773f3ab74e",
-    "createdAt": "2025-10-27T08:03:33.151Z"
-  },
-  {
-    "name": "c",
-    "address": "0x1674125aaea42526106d289ed4021035ebe0f0d57c34a89d2ad748606ee64cad",
-    "privateKey": "0x01b9285b93033a2b1b0077544156be5401a554b74e03a0b3bbf5ebda0edbda6f",
-    "publicKeyX": "0x1c2f463840c0fd113ad643ccd823fb2706aa730403cd89b59f0d9aa09c7dc45c",
-    "publicKeyY": "0x205c2492ec2cda8a90df7dab600aadd78f4e5d4332d0a7e36c2ff60ffcf806a0",
-    "createdAt": "2025-10-27T08:03:40.032Z"
+    "address": "0x1de5784c20ca03098cb931c09997f349d3c0871c777abdde96ad7fbdf0c09305",
+    "privateKey": "0x06237332f6e381fb02cf8eae82ad6ac5f3c149516a19060b6ca415ab6990d48d",
+    "publicKeyX": "0x1f776f79ed845415dd7bd14c776b0b16ba72d22d81bac49096c280acf87ae24c",
+    "publicKeyY": "0x20d4589c4acc1ba9816e794f8414e48c101194069f611cd8e567fb99aa099b6e",
+    "createdAt": "2025-10-27T08:32:40.328Z"
   }
 ]

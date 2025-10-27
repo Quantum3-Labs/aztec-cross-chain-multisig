@@ -32,6 +32,7 @@ import { setupSponsoredFPC } from "./sponsored_fpc";
 import { MultisigAccountContract } from "../aztec-contracts/src/artifacts/MultisigAccount";
 import {
   proposeAddSigner,
+  proposeCrossChainIntent,
   signProposal,
   getProposalStatus,
   listPendingProposals,
@@ -41,6 +42,7 @@ import {
   AddSignerData,
   RemoveSignerData,
   ChangeThresholdData,
+  CrossChainIntentData,
 } from "./src/proposal-manager";
 
 const program = new Command();
@@ -120,7 +122,7 @@ program
         );
       }
     } catch (error) {
-      console.error("Error creating multisig contract:", error);
+      console.error(chalk.red("Error creating multisig contract:"), error);
       process.exit(1);
     }
   });
@@ -532,6 +534,96 @@ program
   });
 
 program
+  .command("propose-cross-chain-intent")
+  .description("Propose executing a cross-chain intent")
+  .requiredOption("--amount <amount>", "Amount to transfer")
+  .requiredOption("--recipient <address>", "Recipient address")
+  .action(async (opts) => {
+    const spinner = ora("Proposing cross-chain intent...").start();
+    try {
+      console.log("\n" + chalk.cyan("═".repeat(70)));
+      console.log(chalk.cyan.bold("PROPOSE CROSS-CHAIN INTENT"));
+      console.log(chalk.cyan("═".repeat(70)));
+
+      spinner.text = "Loading current multisig and signer...";
+
+      const currentMultisig = await getCurrentMultisig();
+      const currentSigner = await getCurrentSigner();
+
+      if (!currentMultisig || !currentSigner) {
+        throw new Error("No current multisig or signer set");
+      }
+
+      // Validate amount
+      const amount = parseInt(opts.amount);
+      if (isNaN(amount) || amount < 0) {
+        throw new Error("Amount must be a non-negative number");
+      }
+
+      // Check if current multisig has an Arbitrum proxy
+      if (!currentMultisig.arbitrumProxy) {
+        throw new Error(
+          "Current multisig does not have an Arbitrum proxy deployed"
+        );
+      }
+
+      spinner.text = "Creating proposal...";
+
+      // Use fixed values: target chain is always 421614 (Arbitrum Sepolia),
+      // target contract is the current multisig's Arbitrum proxy,
+      // intent type is always 1 (TRANSFER),
+      // and deadline is always 24 hours from now
+      const targetChain = "421614";
+      const targetContract = currentMultisig.arbitrumProxy;
+      const intentType = "1"; // Always TRANSFER
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400); // 24 hours from now
+
+      const proposal = await proposeCrossChainIntent(
+        targetChain,
+        targetContract,
+        intentType,
+        opts.amount,
+        opts.recipient,
+        deadline.toString()
+      );
+
+      spinner.succeed("Proposal created!");
+
+      console.log(chalk.green("\n✅ Cross-chain intent proposal created!"));
+      console.log(chalk.white(`   Proposal ID: ${proposal.id}`));
+      console.log(chalk.white(`   Message Hash: ${proposal.messageHash}`));
+      console.log(
+        chalk.white(`   Target Chain: ${targetChain} (Arbitrum Sepolia)`)
+      );
+      console.log(chalk.white(`   Target Contract: ${targetContract}`));
+      console.log(chalk.white(`   Intent Type: ${intentType} (TRANSFER)`));
+      console.log(chalk.white(`   Amount: ${opts.amount}`));
+      console.log(chalk.white(`   Recipient: ${opts.recipient}`));
+      console.log(chalk.white(`   Deadline: ${deadline} (24 hours from now)`));
+      console.log(chalk.white(`   Threshold: ${proposal.threshold}`));
+      console.log(chalk.cyan("\n💡 Next steps:"));
+      console.log(
+        chalk.white("   1. Share the message hash with other signers")
+      );
+      console.log(
+        chalk.white(
+          `   2. Each signer runs: yarn dev sign-proposal --message-hash ${proposal.messageHash}`
+        )
+      );
+      console.log(
+        chalk.white(
+          `   3. Once threshold is met, run: yarn dev execute-cross-chain-intent --message-hash ${proposal.messageHash}`
+        )
+      );
+      console.log(chalk.cyan("═".repeat(70)) + "\n");
+    } catch (error: any) {
+      spinner.fail("Failed");
+      console.error(chalk.red("\n❌ " + error.message + "\n"));
+      process.exit(1);
+    }
+  });
+
+program
   .command("sign-proposal")
   .description("Sign any pending proposal")
   .requiredOption("--message-hash <hash>", "Message hash of the proposal")
@@ -575,11 +667,6 @@ program
       const updatedStatus = getProposalStatus(opts.messageHash);
       if (updatedStatus.signatures.length >= proposal.threshold) {
         console.log(chalk.yellow("\n🎉 Threshold reached! Ready to execute."));
-        console.log(
-          chalk.white(
-            `   Run: npx tsx cli/index.ts execute-proposal --message-hash ${opts.messageHash}`
-          )
-        );
       }
 
       console.log(chalk.cyan("═".repeat(70)) + "\n");
@@ -980,6 +1067,141 @@ program
       console.log(chalk.cyan("\n💡 Next steps:"));
       console.log(chalk.white("   1. Verify the threshold was updated"));
       console.log(chalk.white("   2. Update any external systems if needed"));
+      console.log(chalk.cyan("═".repeat(70)) + "\n");
+    } catch (error: any) {
+      spinner.fail("Failed");
+      console.error(chalk.red("\n❌ " + error.message + "\n"));
+      process.exit(1);
+    }
+  });
+
+program
+  .command("execute-cross-chain-intent")
+  .description("Execute a cross-chain intent proposal")
+  .requiredOption("--message-hash <hash>", "Message hash of the proposal")
+  .action(async (opts) => {
+    const spinner = ora("Executing cross-chain intent...").start();
+    try {
+      console.log("\n" + chalk.cyan("═".repeat(70)));
+      console.log(chalk.cyan.bold("EXECUTE CROSS-CHAIN INTENT"));
+      console.log(chalk.cyan("═".repeat(70)));
+
+      spinner.text = "Loading proposal and signatures...";
+
+      const { proposal, signatures } = getProposalStatus(opts.messageHash);
+
+      if (!proposal) {
+        throw new Error("Proposal not found");
+      }
+
+      if (proposal.status !== "pending") {
+        throw new Error(`Proposal is ${proposal.status}, cannot execute`);
+      }
+
+      if (proposal.type !== "cross_chain_intent") {
+        throw new Error("Proposal is not a cross-chain intent proposal");
+      }
+
+      if (signatures.length < proposal.threshold) {
+        throw new Error(
+          `Insufficient signatures: ${signatures.length}/${proposal.threshold}`
+        );
+      }
+
+      spinner.text = "Loading wallet and contract...";
+
+      const currentSigner = await getCurrentSigner();
+      const currentMultisig = await getCurrentMultisig();
+
+      if (!currentSigner || !currentMultisig) {
+        throw new Error("No current signer or multisig set");
+      }
+
+      // get current multisig shared state account
+      const sharedStateAccount = await getSharedStateAccount(
+        currentMultisig.address
+      );
+
+      const contractAddress = toAddress(currentMultisig.address);
+
+      const contract = await MultisigAccountContract.at(
+        contractAddress,
+        await sharedStateAccount.getWallet()
+      );
+
+      spinner.text = "Preparing signatures...";
+
+      // Convert signatures to contract format
+      const contractSignatures = Array(8)
+        .fill(null)
+        .map(() => ({
+          owner: AztecAddress.ZERO,
+          signature: new Array(64).fill(0),
+        }));
+
+      signatures.forEach((sig, index) => {
+        if (index < 8) {
+          // Parse the signature from JSON string back to number array
+          const signatureBytes = JSON.parse(sig.signature);
+
+          contractSignatures[index] = {
+            owner: AztecAddress.fromString(sig.signerAddress),
+            signature: signatureBytes,
+          };
+        }
+      });
+
+      spinner.text = "Executing cross-chain intent transaction...";
+
+      const fee = await setupSponsoredFPC();
+
+      const proposalData = proposal.data as CrossChainIntentData;
+      const tx = await contract.methods
+        .execute_cross_chain_intent(
+          Fr.fromString(opts.messageHash),
+          Fr.fromString(proposalData.targetChain),
+          ethToAztecAddress(proposalData.targetContract),
+          Fr.fromString(proposalData.intentType),
+          Fr.fromString(proposalData.amount),
+          ethToAztecAddress(proposalData.recipient),
+          AztecAddress.fromString(WORMHOLE_ADDRESS),
+          contractSignatures
+        )
+        .send({
+          from: (await sharedStateAccount.getWallet()).getAddress(),
+          fee,
+        })
+        .wait({ timeout: 300_000 });
+
+      spinner.succeed("Executed!");
+
+      console.log(
+        chalk.green("\n✅ Cross-chain intent executed successfully!")
+      );
+      console.log(chalk.white(`   TX: ${tx.txHash}`));
+      console.log(chalk.white(`   Target Chain: ${proposalData.targetChain}`));
+      console.log(
+        chalk.white(`   Target Contract: ${proposalData.targetContract}`)
+      );
+      console.log(chalk.white(`   Intent Type: ${proposalData.intentType}`));
+      console.log(chalk.white(`   Amount: ${proposalData.amount}`));
+      console.log(chalk.white(`   Recipient: ${proposalData.recipient}`));
+      console.log(chalk.white(`   Signatures Used: ${signatures.length}`));
+
+      // Clean up the executed proposal
+      cleanupExecutedProposal(opts.messageHash);
+
+      console.log(chalk.cyan("\n💡 Next steps:"));
+      console.log(
+        chalk.white(
+          "   1. Monitor the Arbitrum network for the intent execution"
+        )
+      );
+      console.log(
+        chalk.white(
+          "   2. Check the ArbitrumIntentVault contract for execution status"
+        )
+      );
       console.log(chalk.cyan("═".repeat(70)) + "\n");
     } catch (error: any) {
       spinner.fail("Failed");

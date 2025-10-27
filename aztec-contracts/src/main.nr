@@ -345,9 +345,9 @@ pub contract MultisigAccount {
         }
 
         // Publish to Wormhole
-        Wormhole::at(wormhole_address)
-            .publish_message_in_private(0, payload, 0, 1, context.msg_sender(), 0)
-            .call(&mut context);
+        // Wormhole::at(wormhole_address)
+        //     .publish_message_in_private(0, payload, 0, 1, context.msg_sender(), 0)
+        //     .call(&mut context);
 
         storage
             .executed_message_hashes
