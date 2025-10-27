@@ -50,6 +50,10 @@ program
   .description("CLI tool for managing multisig signers")
   .version("1.0.0");
 
+// ================================================
+// Signer Commands
+// ================================================
+
 program
   .command("create-signer")
   .description("Create a new signer and add it to the signer registry")
@@ -57,38 +61,12 @@ program
   .action(async (name) => {
     try {
       const signer = await createSigner(name);
-      console.log(`✓ Created signer: ${name}`);
-      console.log(`  Private Key: ${signer.privateKey}`);
-      console.log(`  Public Key X: ${signer.publicKeyX}`);
-      console.log(`  Public Key Y: ${signer.publicKeyY}`);
+      console.log(chalk.green(`✓ Created signer: ${name}`));
+      console.log(chalk.white(`  Private Key: ${signer.privateKey}`));
+      console.log(chalk.white(`  Public Key X: ${signer.publicKeyX}`));
+      console.log(chalk.white(`  Public Key Y: ${signer.publicKeyY}`));
     } catch (error) {
-      console.error("Error creating signer:", error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command("list-signers")
-  .description("List all registered signers")
-  .action(async () => {
-    try {
-      const signers = await listSigners();
-      if (signers.length === 0) {
-        console.log("No signers registered.");
-        return;
-      }
-
-      console.log("Registered Signers:");
-      console.log("=".repeat(50));
-      signers.forEach((signer, index) => {
-        console.log(`${index + 1}. ${signer.name}`);
-        console.log(`   Private Key: ${signer.privateKey}`);
-        console.log(`   Public Key X: ${signer.publicKeyX}`);
-        console.log(`   Public Key Y: ${signer.publicKeyY}`);
-        console.log("");
-      });
-    } catch (error) {
-      console.error("Error listing signers:", error);
+      console.error(chalk.red("Error creating signer:"), error);
       process.exit(1);
     }
   });
@@ -131,46 +109,18 @@ program
       // pass signer to create multisig
       const multisigInfo = await createMultisig(signers, thresholdNum, name);
       console.log(
-        `✓ Multisig "${name}" created with ${signerNames.length} signers and threshold ${thresholdNum}`
+        chalk.green(
+          `✓ Multisig "${name}" created with ${signerNames.length} signers and threshold ${thresholdNum}`
+        )
       );
-      console.log(`  Aztec Address: ${multisigInfo.address}`);
+      console.log(chalk.white(`  Aztec Address: ${multisigInfo.address}`));
       if (multisigInfo.arbitrumProxy) {
-        console.log(`  Arbitrum Proxy: ${multisigInfo.arbitrumProxy}`);
+        console.log(
+          chalk.white(`  Arbitrum Proxy: ${multisigInfo.arbitrumProxy}`)
+        );
       }
     } catch (error) {
       console.error("Error creating multisig contract:", error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command("list-multisigs")
-  .description("List all registered multisig contracts")
-  .action(async () => {
-    try {
-      const multisigs = await listMultisigs();
-      if (multisigs.length === 0) {
-        console.log("No multisig contracts registered.");
-        return;
-      }
-
-      console.log("Registered Multisig Contracts:");
-      console.log("=".repeat(60));
-      multisigs.forEach((multisig, index) => {
-        console.log(`${index + 1}. ${multisig.name}`);
-        console.log(`   Aztec Address: ${multisig.address}`);
-        if (multisig.arbitrumProxy) {
-          console.log(`   Arbitrum Proxy: ${multisig.arbitrumProxy}`);
-        }
-        console.log(
-          `   Threshold: ${multisig.threshold}/${multisig.signers.length}`
-        );
-        console.log(`   Signers: ${multisig.signers.join(", ")}`);
-        console.log(`   Created: ${multisig.createdAt}`);
-        console.log("");
-      });
-    } catch (error) {
-      console.error("Error listing multisigs:", error);
       process.exit(1);
     }
   });
@@ -182,9 +132,9 @@ program
   .action(async (name) => {
     try {
       await setCurrentSigner(name);
-      console.log(`✓ Set current signer to: ${name}`);
+      console.log(chalk.green(`✓ Set current signer to: ${name}`));
     } catch (error) {
-      console.error("Error setting current signer:", error);
+      console.error(chalk.red("Error setting current signer:"), error);
       process.exit(1);
     }
   });
@@ -196,177 +146,9 @@ program
   .action(async (name) => {
     try {
       await setCurrentMultisig(name);
-      console.log(`✓ Set current multisig to: ${name}`);
+      console.log(chalk.green(`✓ Set current multisig to: ${name}`));
     } catch (error) {
-      console.error("Error setting current multisig:", error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command("status")
-  .description("Show current global state")
-  .action(async () => {
-    try {
-      const state = await getGlobalState();
-      const currentSigner = await getCurrentSigner();
-      const currentMultisig = await getCurrentMultisig();
-
-      console.log("Current Global State:");
-      console.log("=".repeat(30));
-
-      if (currentSigner) {
-        console.log(`Current Signer: ${currentSigner.name}`);
-        console.log(`  Private Key: ${currentSigner.privateKey}`);
-        console.log(`  Public Key X: ${currentSigner.publicKeyX}`);
-        console.log(`  Public Key Y: ${currentSigner.publicKeyY}`);
-      } else {
-        console.log("Current Signer: None");
-      }
-
-      console.log("");
-
-      if (currentMultisig) {
-        console.log(`Current Multisig: ${currentMultisig.name}`);
-        console.log(`  Aztec Address: ${currentMultisig.address}`);
-        if (currentMultisig.arbitrumProxy) {
-          console.log(`  Arbitrum Proxy: ${currentMultisig.arbitrumProxy}`);
-        }
-        console.log(
-          `  Threshold: ${currentMultisig.threshold}/${currentMultisig.signers.length}`
-        );
-        console.log(`  Signers: ${currentMultisig.signers.join(", ")}`);
-      } else {
-        console.log("Current Multisig: None");
-      }
-    } catch (error) {
-      console.error("Error getting status:", error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command("list-proxies")
-  .description("List all deployed Arbitrum proxies")
-  .action(async () => {
-    try {
-      const proxies = await listArbitrumProxies();
-      if (proxies.length === 0) {
-        console.log("No Arbitrum proxies deployed.");
-        return;
-      }
-
-      console.log("Deployed Arbitrum Proxies:");
-      console.log("=".repeat(50));
-      proxies.forEach((proxy, index) => {
-        console.log(`${index + 1}. ${proxy.name}`);
-        console.log(`   Address: ${proxy.address}`);
-        console.log(`   Multisig: ${proxy.multisigName}`);
-        console.log(`   Created: ${proxy.createdAt}`);
-        console.log("");
-      });
-    } catch (error) {
-      console.error("Error listing proxies:", error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command("setup-alice-family")
-  .description("Create Alice signer and Family multisig in one command")
-  .action(async () => {
-    try {
-      console.log("🚀 Setting up Alice signer and Family multisig...");
-      console.log("");
-
-      // Step 1: Create Alice signer
-      console.log("1. Creating Alice signer...");
-      const alice = await createSigner("alice");
-      console.log(`✓ Created signer: alice`);
-      console.log(`  Private Key: ${alice.privateKey}`);
-      console.log(`  Public Key X: ${alice.publicKeyX}`);
-      console.log(`  Public Key Y: ${alice.publicKeyY}`);
-      console.log("");
-
-      // Step 2: Set Alice as current signer
-      console.log("2. Setting Alice as current signer...");
-      await setCurrentSigner("alice");
-      console.log(`✓ Set current signer to: alice`);
-      console.log("");
-
-      // Step 3: Create Family multisig with Alice
-      console.log("3. Creating Family multisig with Alice...");
-      const familyMultisig = await createMultisig([alice], 1, "family");
-      console.log(`✓ Multisig "family" created with 1 signer and threshold 1`);
-      console.log(`  Aztec Address: ${familyMultisig.address}`);
-      if (familyMultisig.arbitrumProxy) {
-        console.log(`  Arbitrum Proxy: ${familyMultisig.arbitrumProxy}`);
-      }
-      console.log("");
-
-      // Step 4: Set Family as current multisig
-      console.log("4. Setting Family as current multisig...");
-      await setCurrentMultisig("family");
-      console.log(`✓ Set current multisig to: family`);
-      console.log("");
-
-      console.log(
-        "🎉 Setup complete! Alice is ready to use the Family multisig."
-      );
-      console.log(
-        "You can now run: yarn dev propose-cross-chain --amount 100 --recipient <address>"
-      );
-    } catch (error) {
-      console.error("Error setting up Alice and Family:", error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command("clean")
-  .description(
-    "Remove all JSON files (signers, multisigs, proxies, global state)"
-  )
-  .action(async () => {
-    try {
-      console.log("🧹 Cleaning up all JSON files...");
-
-      const filesToRemove = [
-        "signers.json",
-        "multisigs.json",
-        "arbitrum-proxies.json",
-        "global-state.json",
-        "pending-proposals.json",
-        "pending-signatures.json",
-      ];
-
-      let removedCount = 0;
-      for (const file of filesToRemove) {
-        try {
-          const fs = await import("fs");
-          if (fs.existsSync(file)) {
-            fs.unlinkSync(file);
-            console.log(`✓ Removed ${file}`);
-            removedCount++;
-          } else {
-            console.log(`- ${file} (not found)`);
-          }
-        } catch (error) {
-          console.log(`✗ Failed to remove ${file}: ${error}`);
-        }
-      }
-
-      // setup pxe then remove store
-      const { store } = await setupPXE();
-      await store.delete();
-
-      console.log("");
-      console.log(`🎉 Cleanup complete! Removed ${removedCount} files.`);
-      console.log(
-        "All signers, multisigs, proxies, and global state have been cleared."
-      );
-    } catch (error) {
-      console.error("Error during cleanup:", error);
+      console.error(chalk.red("Error setting current multisig:"), error);
       process.exit(1);
     }
   });
@@ -521,6 +303,10 @@ program
       process.exit(1);
     }
   });
+
+// ================================================
+// Proposal Commands
+// ================================================
 
 program
   .command("propose-add-signer")
@@ -803,6 +589,10 @@ program
       process.exit(1);
     }
   });
+
+// ================================================
+// Execute Commands
+// ================================================
 
 program
   .command("execute-add-signer")
@@ -1198,6 +988,10 @@ program
     }
   });
 
+// ================================================
+// View Commands
+// ================================================
+
 program
   .command("list-proposals")
   .description("List all pending proposals")
@@ -1206,50 +1000,194 @@ program
       const proposals = listPendingProposals();
 
       if (proposals.length === 0) {
-        console.log("No pending proposals.");
+        console.log(chalk.yellow("No pending proposals."));
         return;
       }
 
-      console.log("Pending Proposals:");
-      console.log("=".repeat(60));
+      console.log(chalk.cyan.bold("Pending Proposals:"));
+      console.log(chalk.cyan("=".repeat(60)));
 
       proposals.forEach((proposal, index) => {
         const { signatures } = getProposalStatus(proposal.messageHash);
 
-        console.log(`${index + 1}. ${proposal.id}`);
-        console.log(`   Type: ${proposal.type}`);
-        console.log(`   Multisig: ${proposal.multisigName}`);
-        console.log(`   Message Hash: ${proposal.messageHash}`);
+        console.log(chalk.white(`${index + 1}. ${proposal.id}`));
+        console.log(chalk.gray(`   Type: ${proposal.type}`));
+        console.log(chalk.gray(`   Multisig: ${proposal.multisigName}`));
+        console.log(chalk.gray(`   Message Hash: ${proposal.messageHash}`));
         console.log(
-          `   Progress: ${signatures.length}/${proposal.threshold} signatures`
+          chalk.gray(
+            `   Progress: ${signatures.length}/${proposal.threshold} signatures`
+          )
         );
-        console.log(`   Proposer: ${proposal.proposer}`);
-        console.log(`   Created: ${proposal.createdAt}`);
+        console.log(chalk.gray(`   Proposer: ${proposal.proposer}`));
+        console.log(chalk.gray(`   Created: ${proposal.createdAt}`));
 
         // Show type-specific details
         switch (proposal.type) {
           case "add_signer":
             const addData = proposal.data as any;
-            console.log(`   New Signer: ${addData.newSignerName}`);
+            console.log(chalk.green(`   New Signer: ${addData.newSignerName}`));
             break;
           case "remove_signer":
             const removeData = proposal.data as any;
-            console.log(`   Target Signer: ${removeData.targetSignerName}`);
+            console.log(
+              chalk.red(`   Target Signer: ${removeData.targetSignerName}`)
+            );
             break;
           case "change_threshold":
             const thresholdData = proposal.data as any;
-            console.log(`   New Threshold: ${thresholdData.newThreshold}`);
+            console.log(
+              chalk.blue(`   New Threshold: ${thresholdData.newThreshold}`)
+            );
             break;
           case "cross_chain_intent":
             const crossChainData = proposal.data as any;
-            console.log(`   Amount: ${crossChainData.amount}`);
-            console.log(`   Recipient: ${crossChainData.recipient}`);
+            console.log(chalk.magenta(`   Amount: ${crossChainData.amount}`));
+            console.log(
+              chalk.magenta(`   Recipient: ${crossChainData.recipient}`)
+            );
             break;
         }
         console.log("");
       });
     } catch (error) {
-      console.error("Error listing proposals:", error);
+      console.error(chalk.red("Error listing proposals:"), error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("list-proxies")
+  .description("List all deployed Arbitrum proxies")
+  .action(async () => {
+    try {
+      const proxies = await listArbitrumProxies();
+      if (proxies.length === 0) {
+        console.log(chalk.yellow("No Arbitrum proxies deployed."));
+        return;
+      }
+
+      console.log(chalk.cyan.bold("Deployed Arbitrum Proxies:"));
+      console.log(chalk.cyan("=".repeat(50)));
+      proxies.forEach((proxy, index) => {
+        console.log(chalk.white(`${index + 1}. ${proxy.name}`));
+        console.log(chalk.gray(`   Address: ${proxy.address}`));
+        console.log(chalk.gray(`   Multisig: ${proxy.multisigName}`));
+        console.log(chalk.gray(`   Created: ${proxy.createdAt}`));
+        console.log("");
+      });
+    } catch (error) {
+      console.error(chalk.red("Error listing proxies:"), error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("status")
+  .description("Show current global state")
+  .action(async () => {
+    try {
+      const state = await getGlobalState();
+      const currentSigner = await getCurrentSigner();
+      const currentMultisig = await getCurrentMultisig();
+
+      console.log(chalk.cyan.bold("Current Global State:"));
+      console.log(chalk.cyan("=".repeat(30)));
+
+      if (currentSigner) {
+        console.log(chalk.white(`Current Signer: ${currentSigner.name}`));
+        console.log(chalk.gray(`  Private Key: ${currentSigner.privateKey}`));
+        console.log(chalk.gray(`  Public Key X: ${currentSigner.publicKeyX}`));
+        console.log(chalk.gray(`  Public Key Y: ${currentSigner.publicKeyY}`));
+      } else {
+        console.log(chalk.red("Current Signer: None"));
+      }
+
+      console.log("");
+
+      if (currentMultisig) {
+        console.log(chalk.white(`Current Multisig: ${currentMultisig.name}`));
+        console.log(chalk.gray(`  Aztec Address: ${currentMultisig.address}`));
+        if (currentMultisig.arbitrumProxy) {
+          console.log(
+            chalk.gray(`  Arbitrum Proxy: ${currentMultisig.arbitrumProxy}`)
+          );
+        }
+        console.log(
+          chalk.gray(
+            `  Threshold: ${currentMultisig.threshold}/${currentMultisig.signers.length}`
+          )
+        );
+        console.log(
+          chalk.gray(`  Signers: ${currentMultisig.signers.join(", ")}`)
+        );
+      } else {
+        console.log(chalk.red("Current Multisig: None"));
+      }
+    } catch (error) {
+      console.error(chalk.red("Error getting status:"), error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("list-signers")
+  .description("List all registered signers")
+  .action(async () => {
+    try {
+      const signers = await listSigners();
+      if (signers.length === 0) {
+        console.log(chalk.yellow("No signers registered."));
+        return;
+      }
+
+      console.log(chalk.cyan.bold("Registered Signers:"));
+      console.log(chalk.cyan("=".repeat(50)));
+      signers.forEach((signer, index) => {
+        console.log(chalk.white(`${index + 1}. ${signer.name}`));
+        console.log(chalk.gray(`   Private Key: ${signer.privateKey}`));
+        console.log(chalk.gray(`   Public Key X: ${signer.publicKeyX}`));
+        console.log(chalk.gray(`   Public Key Y: ${signer.publicKeyY}`));
+        console.log("");
+      });
+    } catch (error) {
+      console.error(chalk.red("Error listing signers:"), error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("list-multisigs")
+  .description("List all registered multisig contracts")
+  .action(async () => {
+    try {
+      const multisigs = await listMultisigs();
+      if (multisigs.length === 0) {
+        console.log(chalk.yellow("No multisig contracts registered."));
+        return;
+      }
+
+      console.log(chalk.cyan.bold("Registered Multisig Contracts:"));
+      console.log(chalk.cyan("=".repeat(60)));
+      multisigs.forEach((multisig, index) => {
+        console.log(chalk.white(`${index + 1}. ${multisig.name}`));
+        console.log(chalk.gray(`   Aztec Address: ${multisig.address}`));
+        if (multisig.arbitrumProxy) {
+          console.log(
+            chalk.gray(`   Arbitrum Proxy: ${multisig.arbitrumProxy}`)
+          );
+        }
+        console.log(
+          chalk.gray(
+            `   Threshold: ${multisig.threshold}/${multisig.signers.length}`
+          )
+        );
+        console.log(chalk.gray(`   Signers: ${multisig.signers.join(", ")}`));
+        console.log(chalk.gray(`   Created: ${multisig.createdAt}`));
+        console.log("");
+      });
+    } catch (error) {
+      console.error(chalk.red("Error listing multisigs:"), error);
       process.exit(1);
     }
   });
@@ -1265,56 +1203,125 @@ program
       );
 
       if (!proposal) {
-        console.log("Proposal not found.");
+        console.log(chalk.red("Proposal not found."));
         return;
       }
 
-      console.log("Proposal Status:");
-      console.log("=".repeat(40));
-      console.log(`Proposal ID: ${proposal.id}`);
-      console.log(`Type: ${proposal.type}`);
-      console.log(`Multisig: ${proposal.multisigName}`);
-      console.log(`Message Hash: ${proposal.messageHash}`);
-      console.log(`Status: ${proposal.status}`);
-      console.log(`Progress: ${progress}`);
-      console.log(`Proposer: ${proposal.proposer}`);
-      console.log(`Created: ${proposal.createdAt}`);
+      console.log(chalk.cyan.bold("Proposal Status:"));
+      console.log(chalk.cyan("=".repeat(40)));
+      console.log(chalk.white(`Proposal ID: ${proposal.id}`));
+      console.log(chalk.white(`Type: ${proposal.type}`));
+      console.log(chalk.white(`Multisig: ${proposal.multisigName}`));
+      console.log(chalk.white(`Message Hash: ${proposal.messageHash}`));
+      console.log(chalk.white(`Status: ${proposal.status}`));
+      console.log(chalk.white(`Progress: ${progress}`));
+      console.log(chalk.white(`Proposer: ${proposal.proposer}`));
+      console.log(chalk.white(`Created: ${proposal.createdAt}`));
 
       // Show type-specific details
       switch (proposal.type) {
         case "add_signer":
           const addData = proposal.data as any;
-          console.log(`New Signer: ${addData.newSignerName}`);
-          console.log(`New Signer Address: ${addData.newSignerAddress}`);
+          console.log(chalk.green(`New Signer: ${addData.newSignerName}`));
+          console.log(
+            chalk.green(`New Signer Address: ${addData.newSignerAddress}`)
+          );
           break;
         case "remove_signer":
           const removeData = proposal.data as any;
-          console.log(`Target Signer: ${removeData.targetSignerName}`);
           console.log(
-            `Target Signer Address: ${removeData.targetSignerAddress}`
+            chalk.red(`Target Signer: ${removeData.targetSignerName}`)
+          );
+          console.log(
+            chalk.red(
+              `Target Signer Address: ${removeData.targetSignerAddress}`
+            )
           );
           break;
         case "change_threshold":
           const thresholdData = proposal.data as any;
-          console.log(`New Threshold: ${thresholdData.newThreshold}`);
+          console.log(
+            chalk.blue(`New Threshold: ${thresholdData.newThreshold}`)
+          );
           break;
         case "cross_chain_intent":
           const crossChainData = proposal.data as any;
-          console.log(`Amount: ${crossChainData.amount}`);
-          console.log(`Recipient: ${crossChainData.recipient}`);
-          console.log(`Target Chain: ${crossChainData.targetChain}`);
+          console.log(chalk.magenta(`Amount: ${crossChainData.amount}`));
+          console.log(chalk.magenta(`Recipient: ${crossChainData.recipient}`));
+          console.log(
+            chalk.magenta(`Target Chain: ${crossChainData.targetChain}`)
+          );
           break;
       }
       console.log("");
 
       if (signatures.length > 0) {
-        console.log("Signatures:");
+        console.log(chalk.cyan("Signatures:"));
         signatures.forEach((sig, index) => {
-          console.log(`  ${index + 1}. ${sig.signerName} (${sig.createdAt})`);
+          console.log(
+            chalk.gray(`  ${index + 1}. ${sig.signerName} (${sig.createdAt})`)
+          );
         });
       }
     } catch (error) {
-      console.error("Error getting proposal status:", error);
+      console.error(chalk.red("Error getting proposal status:"), error);
+      process.exit(1);
+    }
+  });
+
+// ================================================
+// Utility Commands
+// ================================================
+
+program
+  .command("clean")
+  .description(
+    "Remove all JSON files (signers, multisigs, proxies, global state)"
+  )
+  .action(async () => {
+    try {
+      console.log(chalk.cyan("🧹 Cleaning up all JSON files..."));
+
+      const filesToRemove = [
+        "signers.json",
+        "multisigs.json",
+        "arbitrum-proxies.json",
+        "global-state.json",
+        "pending-proposals.json",
+        "pending-signatures.json",
+      ];
+
+      let removedCount = 0;
+      for (const file of filesToRemove) {
+        try {
+          const fs = await import("fs");
+          if (fs.existsSync(file)) {
+            fs.unlinkSync(file);
+            console.log(chalk.green(`✓ Removed ${file}`));
+            removedCount++;
+          } else {
+            console.log(chalk.gray(`- ${file} (not found)`));
+          }
+        } catch (error) {
+          console.log(chalk.red(`✗ Failed to remove ${file}: ${error}`));
+        }
+      }
+
+      // setup pxe then remove store
+      const { store } = await setupPXE();
+      await store.delete();
+
+      console.log("");
+      console.log(
+        chalk.green(`🎉 Cleanup complete! Removed ${removedCount} files.`)
+      );
+      console.log(
+        chalk.white(
+          "All signers, multisigs, proxies, and global state have been cleared."
+        )
+      );
+    } catch (error) {
+      console.error(chalk.red("Error during cleanup:"), error);
       process.exit(1);
     }
   });

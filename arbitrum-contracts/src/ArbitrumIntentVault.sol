@@ -71,15 +71,21 @@ contract ArbitrumIntentVault is VaultGetters {
         require(payload.length >= 124, "Payload too short");
 
         // Parse 31-byte chunks from Aztec
-        bytes32 txId = bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 0, 31)));
-        
-        uint256 intentTypeRaw = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 31, 31))));
-        
+        bytes32 txId = bytes32(
+            bytes.concat(bytes1(0), BytesLib.slice(payload, 0, 31))
+        );
+
+        uint256 intentTypeRaw = uint256(
+            bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 31, 31)))
+        );
+
         // Extract Ethereum address from payload_3 (bytes 11-30 of the 31-byte chunk)
         bytes memory addressBytes = BytesLib.slice(payload, 62 + 11, 20);
         address targetAddress = address(uint160(bytes20(addressBytes)));
-        
-        uint256 amount = uint256(bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 93, 31))));
+
+        uint256 amount = uint256(
+            bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 93, 31)))
+        );
 
         require(txId != bytes32(0), "Invalid txId");
         require(_state.arbitrumMessages[txId] == 0, "Already processed");
