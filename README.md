@@ -2,6 +2,9 @@
 
 A comprehensive CLI tool for managing Aztec private multisig contracts with cross-chain capabilities to Arbitrum.
 
+## High Level Architecture
+<img width="8340" height="4083" alt="image" src="https://github.com/user-attachments/assets/539c64f7-34b0-452b-af14-4eb233246739" />
+
 ## Quick Start
 
 ### Installation
