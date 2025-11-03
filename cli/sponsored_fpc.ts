@@ -1,9 +1,9 @@
+import { Fr } from "@aztec/aztec.js/fields";
 import {
-  ContractInstanceWithAddress,
-  Fr,
   getContractInstanceFromInstantiationParams,
-  SponsoredFeePaymentMethod,
-} from "@aztec/aztec.js";
+  type ContractInstanceWithAddress,
+} from "@aztec/aztec.js/contracts";
+import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee/testing";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { setupPXE } from "./setup_pxe";
 
@@ -19,10 +19,10 @@ export async function getSponsoredFPCInstance(): Promise<ContractInstanceWithAdd
 }
 
 export async function setupSponsoredFPC() {
-  const { pxe } = await setupPXE();
+  const { wallet } = await setupPXE();
 
   const sponsoredFPC = await getSponsoredFPCInstance();
-  await pxe.registerContract({
+  await wallet.registerContract({
     instance: sponsoredFPC,
     artifact: SponsoredFPCContract.artifact,
   });

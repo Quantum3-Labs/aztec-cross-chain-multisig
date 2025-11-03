@@ -1,29 +1,27 @@
-import { AztecAddress, waitForPXE } from "@aztec/aztec.js";
 import { Signer, Multisig, saveMultisig } from "./signer-manager";
 import { SALT, SECRET_KEY, WORMHOLE_ADDRESS } from "../constants";
-import { getSchnorrAccount } from "@aztec/accounts/schnorr";
 import { derivePublicKey, pointToFr, toFr, toScalar } from "../utils";
 import { deployArbitrumProxy } from "./arbitrum-deployer";
 import { setupPXE } from "../setup_pxe";
 import { setupSponsoredFPC } from "../sponsored_fpc";
 import { MultisigAccountContract } from "../../aztec-contracts/src/artifacts/MultisigAccount";
 import { createSigner } from "../../tests/utils/signer";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 export async function createMultisig(
   signers: Signer[],
   threshold: number,
   multisigName?: string
 ) {
-  const { pxe } = await setupPXE();
-  await waitForPXE(pxe);
+  const { wallet } = await setupPXE();
 
   const fee = await setupSponsoredFPC();
 
-  const sharedStateAccount = await createSigner(pxe);
+  const sharedStateAccount = await createSigner();
 
   // Deploy multisig contract
   const multisig = await MultisigAccountContract.deploy(
-    sharedStateAccount.wallet,
+    wallet,
     [
       ...signers.map((s) => AztecAddress.fromString(s.address)),
       // fill the rest of the signers with zeros
@@ -39,7 +37,10 @@ export async function createMultisig(
       ...Array(8 - signers.length).fill(0),
     ]
   )
-    .send({ from: sharedStateAccount.wallet.getAddress(), fee })
+    .send({
+      from: sharedStateAccount.wallet.address,
+      fee,
+    })
     .deployed();
 
   // Save multisig information

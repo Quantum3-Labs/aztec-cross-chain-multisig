@@ -1,14 +1,8 @@
-import {
-  AztecAddress,
-  Fr,
-  Grumpkin,
-  GrumpkinScalar,
-  Point,
-  Schnorr,
-} from "@aztec/aztec.js";
-import { getSchnorrAccount } from "@aztec/accounts/schnorr";
+import { Fr, GrumpkinScalar, Point } from "@aztec/aztec.js/fields";
 import { setupPXE } from "./setup_pxe";
 import { listMultisigs } from "./src/signer-manager";
+import { Grumpkin, Schnorr } from "@aztec/foundation/crypto";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 export const toFr = (hex: string) => Fr.fromString(BigInt(hex).toString());
 export const toHex0x = (x: { toString(): string }) =>
@@ -45,12 +39,16 @@ export async function signMessage(
 }
 
 export async function getWallet(privateKey: GrumpkinScalar) {
-  const { pxe } = await setupPXE();
+  const { wallet } = await setupPXE();
 
   const secretKey = toFr(process.env.SECRET_KEY!);
   const salt = toFr(process.env.SALT!);
-  const accountMgr = await getSchnorrAccount(pxe, secretKey, privateKey, salt);
-  return accountMgr.getWallet();
+  const accountMgr = await wallet.createSchnorrAccount(
+    secretKey,
+    salt,
+    privateKey
+  );
+  return accountMgr;
 }
 
 export const toAddress = (hex: string) => AztecAddress.fromString(hex);
@@ -63,14 +61,13 @@ export async function getSharedStateAccount(multisigAddress: string) {
     throw new Error(`Multisig ${multisigAddress} not found`);
   }
   // get schnorr account
-  const { pxe } = await setupPXE();
+  const { wallet } = await setupPXE();
   const secretKey = toFr(multisig.sharedStateAccountSecretKey);
   const salt = toFr(multisig.sharedStateAccountSaltKey);
-  const account = await getSchnorrAccount(
-    pxe,
+  const account = await wallet.createSchnorrAccount(
     secretKey,
-    toScalar(multisig.sharedStateAccountPrivateKey),
-    salt
+    salt,
+    toScalar(multisig.sharedStateAccountPrivateKey)
   );
   return account;
 }

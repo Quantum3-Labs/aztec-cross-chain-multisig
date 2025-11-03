@@ -4,10 +4,10 @@ import path from "path";
 import { GrumpkinScalar } from "@aztec/foundation/fields";
 import { Grumpkin } from "@aztec/foundation/crypto";
 import { SALT, SECRET_KEY } from "../constants";
-import { getSchnorrAccount } from "@aztec/accounts/schnorr";
 import { toFr, toHex0x } from "../utils";
 import { setupPXE } from "../setup_pxe";
 import { setupSponsoredFPC } from "../sponsored_fpc";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 const SIGNERS_FILE = path.resolve(process.cwd(), "signers.json");
 const MULTISIGS_FILE = path.resolve(process.cwd(), "multisigs.json");
@@ -76,34 +76,26 @@ export async function createSigner(name: string): Promise<Signer> {
   if (signers.some((s) => s.name === name)) {
     throw new Error(`Signer with name "${name}" already exists`);
   }
-  const { pxe } = await setupPXE();
+  const { wallet } = await setupPXE();
 
   const privateKey = GrumpkinScalar.random();
   const grumpkin = new Grumpkin();
   const generator = grumpkin.generator();
   const publicKey = await grumpkin.mul(generator, privateKey);
 
-  const newAccount = await getSchnorrAccount(
-    pxe,
+  const newAccount = await wallet.createSchnorrAccount(
     toFr(SECRET_KEY),
-    privateKey,
-    toFr(SALT)
+    toFr(SALT),
+    privateKey
   );
   const fee = await setupSponsoredFPC();
-
-  await newAccount
-    .deploy({
-      fee: fee,
-    })
-    .wait({
-      timeout: 300_000,
-    });
-  const newWallet = await newAccount.getWallet();
-  const newAccountAddress = newWallet.getAddress();
+  await (await newAccount.getDeployMethod())
+    .send({ from: AztecAddress.ZERO, fee: fee })
+    .wait();
 
   const signer: Signer = {
     name,
-    address: newAccountAddress.toString(),
+    address: newAccount.address.toString(),
     privateKey: toHex0x(privateKey),
     publicKeyX: toHex0x(publicKey.x),
     publicKeyY: toHex0x(publicKey.y),

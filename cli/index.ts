@@ -17,8 +17,6 @@ import {
 } from "./src/signer-manager";
 import { createMultisig } from "./src/create_multisig";
 import { listArbitrumProxies } from "./src/arbitrum-deployer";
-import { AztecAddress, Fr } from "@aztec/aztec.js";
-import { getSchnorrAccount } from "@aztec/accounts/schnorr";
 import {
   ethToAztecAddress,
   getSharedStateAccount,
@@ -44,6 +42,8 @@ import {
   ChangeThresholdData,
   CrossChainIntentData,
 } from "./src/proposal-manager";
+import { Fr } from "@aztec/foundation/fields";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 const program = new Command();
 
@@ -189,26 +189,20 @@ program
       spinner.text = "Loading contract...";
 
       // Ensure the signer account is properly registered
-      const { pxe } = await setupPXE();
-
-      // get pxe contracts
-      const contracts = await pxe.getContracts();
-      console.log(contracts);
+      const { wallet } = await setupPXE();
 
       const secretKey = toFr(SECRET_KEY);
       const salt = toFr(SALT);
-      const accountMgr = await getSchnorrAccount(
-        pxe,
+      const accountMgr = await wallet.createSchnorrAccount(
         secretKey,
-        toScalar(currentSigner.privateKey),
-        salt
+        salt,
+        toScalar(currentSigner.privateKey)
       );
-      const signerWallet = await accountMgr.getWallet();
       const contractAddress = toAddress(currentMultisig.address);
 
       const contract = await MultisigAccountContract.at(
         contractAddress,
-        signerWallet
+        wallet
       );
 
       const targetChain = Fr.fromString("421614");
@@ -255,7 +249,7 @@ program
               AztecAddress.fromString(WORMHOLE_ADDRESS),
               []
             )
-            .send({ from: signerWallet.getAddress(), fee })
+            .send({ from: accountMgr.address, fee })
             .wait({ timeout: 300_000 });
 
           spinner.succeed("Executed!");
@@ -688,6 +682,7 @@ program
   .action(async (opts) => {
     const spinner = ora("Executing add signer...").start();
     try {
+      const { wallet } = await setupPXE();
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE ADD SIGNER"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -728,7 +723,7 @@ program
 
       const contract = await MultisigAccountContract.at(
         contractAddress,
-        await sharedStateAccount.getWallet()
+        wallet
       );
 
       spinner.text = "Preparing signatures...";
@@ -767,7 +762,7 @@ program
           contractSignatures
         )
         .send({
-          from: (await sharedStateAccount.getWallet()).getAddress(),
+          from: sharedStateAccount.address,
           fee,
         })
         .wait({ timeout: 300_000 });
@@ -818,6 +813,8 @@ program
   .action(async (opts) => {
     const spinner = ora("Executing remove signer...").start();
     try {
+      const { wallet } = await setupPXE();
+
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE REMOVE SIGNER"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -862,7 +859,7 @@ program
 
       const contract = await MultisigAccountContract.at(
         contractAddress,
-        await sharedStateAccount.getWallet()
+        wallet
       );
 
       spinner.text = "Preparing signatures...";
@@ -899,7 +896,7 @@ program
           contractSignatures
         )
         .send({
-          from: (await sharedStateAccount.getWallet()).getAddress(),
+          from: sharedStateAccount.address,
           fee,
         })
         .wait({ timeout: 300_000 });
@@ -952,6 +949,7 @@ program
   .action(async (opts) => {
     const spinner = ora("Executing change threshold...").start();
     try {
+      const { wallet } = await setupPXE();
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE CHANGE THRESHOLD"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -996,7 +994,7 @@ program
 
       const contract = await MultisigAccountContract.at(
         contractAddress,
-        await sharedStateAccount.getWallet()
+        wallet
       );
 
       spinner.text = "Preparing signatures...";
@@ -1033,7 +1031,7 @@ program
           contractSignatures
         )
         .send({
-          from: (await sharedStateAccount.getWallet()).getAddress(),
+          from: sharedStateAccount.address,
           fee,
         })
         .wait({ timeout: 300_000 });
@@ -1082,6 +1080,7 @@ program
   .action(async (opts) => {
     const spinner = ora("Executing cross-chain intent...").start();
     try {
+      const { wallet } = await setupPXE();
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE CROSS-CHAIN INTENT"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -1126,7 +1125,7 @@ program
 
       const contract = await MultisigAccountContract.at(
         contractAddress,
-        await sharedStateAccount.getWallet()
+        wallet
       );
 
       spinner.text = "Preparing signatures...";
@@ -1168,7 +1167,7 @@ program
           contractSignatures
         )
         .send({
-          from: (await sharedStateAccount.getWallet()).getAddress(),
+          from: sharedStateAccount.address,
           fee,
         })
         .wait({ timeout: 300_000 });

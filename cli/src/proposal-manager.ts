@@ -1,7 +1,6 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
-import { Fr } from "@aztec/aztec.js";
 import { poseidon2Hash } from "@aztec/foundation/crypto";
 import {
   Signer,
@@ -10,6 +9,7 @@ import {
   getCurrentMultisig,
 } from "./signer-manager";
 import { signMessage, toScalar, toFr } from "../utils";
+import { Fr } from "@aztec/foundation/fields";
 
 const PENDING_PROPOSALS_FILE = path.resolve(
   process.cwd(),

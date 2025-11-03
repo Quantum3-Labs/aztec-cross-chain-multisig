@@ -36,8 +36,8 @@ pub contract MultisigAccount {
     /*
         @dev Since we can't use dynamic array, we will use a fixed size array of 8 signers, it means that maximum number of signers is 8
     */
-    #[initializer]
     #[external("private")]
+    #[initializer]
     fn constructor(
         signers: [AztecAddress; ACCOUNT_MAX_SIGNERS],
         initial_threshold: u32,
