@@ -1,12 +1,9 @@
 import { Fr, GrumpkinScalar } from "@aztec/aztec.js/fields";
 import { toHex0x } from "../../cli/utils";
-import { setupPXE } from "../../cli/setup_pxe";
 import { Grumpkin } from "@aztec/foundation/crypto";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { setupSponsoredFPC } from "../../cli/sponsored_fpc";
-import { Wallet } from "@aztec/aztec.js/wallet";
 import { TestWallet } from "@aztec/test-wallet/server";
-
 export async function createSigner(wallet: TestWallet) {
   const fee = await setupSponsoredFPC();
 

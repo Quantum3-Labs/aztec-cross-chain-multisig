@@ -19,6 +19,7 @@ import { createMultisig } from "./src/create_multisig";
 import { listArbitrumProxies } from "./src/arbitrum-deployer";
 import {
   ethToAztecAddress,
+  getOrCreateSignerAccount,
   getSharedStateAccount,
   toAddress,
   toFr,
@@ -190,14 +191,7 @@ program
 
       // Ensure the signer account is properly registered
       const { wallet } = await setupPXE();
-
-      const secretKey = toFr(SECRET_KEY);
-      const salt = toFr(SALT);
-      const accountMgr = await wallet.createSchnorrAccount(
-        secretKey,
-        salt,
-        toScalar(currentSigner.privateKey)
-      );
+      const accountMgr = await getOrCreateSignerAccount(wallet, currentSigner);
       const contractAddress = toAddress(currentMultisig.address);
 
       const contract = await MultisigAccountContract.at(
@@ -683,6 +677,8 @@ program
     const spinner = ora("Executing add signer...").start();
     try {
       const { wallet } = await setupPXE();
+
+      console.log("accounts:", await wallet.getAccounts());
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE ADD SIGNER"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -716,7 +712,8 @@ program
 
       // get current multisig shared state account
       const sharedStateAccount = await getSharedStateAccount(
-        currentMultisig.address
+        currentMultisig.address,
+        wallet
       );
 
       const contractAddress = toAddress(currentMultisig.address);
@@ -852,7 +849,8 @@ program
 
       // get current multisig shared state account
       const sharedStateAccount = await getSharedStateAccount(
-        currentMultisig.address
+        currentMultisig.address,
+        wallet
       );
 
       const contractAddress = toAddress(currentMultisig.address);
@@ -987,7 +985,8 @@ program
 
       // get current multisig shared state account
       const sharedStateAccount = await getSharedStateAccount(
-        currentMultisig.address
+        currentMultisig.address,
+        wallet
       );
 
       const contractAddress = toAddress(currentMultisig.address);
@@ -1118,7 +1117,8 @@ program
 
       // get current multisig shared state account
       const sharedStateAccount = await getSharedStateAccount(
-        currentMultisig.address
+        currentMultisig.address,
+        wallet
       );
 
       const contractAddress = toAddress(currentMultisig.address);

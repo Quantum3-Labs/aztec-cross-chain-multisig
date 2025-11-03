@@ -93,6 +93,8 @@ export async function createSigner(name: string): Promise<Signer> {
     .send({ from: AztecAddress.ZERO, fee: fee })
     .wait();
 
+  await wallet.registerSender(newAccount.address);
+
   const signer: Signer = {
     name,
     address: newAccount.address.toString(),

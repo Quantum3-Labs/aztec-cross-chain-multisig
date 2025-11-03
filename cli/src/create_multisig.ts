@@ -17,7 +17,7 @@ export async function createMultisig(
 
   const fee = await setupSponsoredFPC();
 
-  const sharedStateAccount = await createSigner();
+  const sharedStateAccount = await createSigner(wallet);
 
   // Deploy multisig contract
   const multisig = await MultisigAccountContract.deploy(
@@ -42,6 +42,12 @@ export async function createMultisig(
       fee,
     })
     .deployed();
+
+  // register multisig contract
+  await wallet.registerContract({
+    instance: multisig.instance,
+    artifact: multisig.artifact,
+  });
 
   // Save multisig information
   const multisigInfo: Multisig = {

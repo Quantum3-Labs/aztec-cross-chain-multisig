@@ -1,51 +1,35 @@
 [
   {
-    "id": "add_signer-1761661552765",
+    "id": "add_signer-1762164389405",
     "type": "add_signer",
-    "messageHash": "0x0a02b49314037b22fb3f2fce8513851fe45b68accd5c704f4b91a7562011a67e",
+    "messageHash": "0x1593556119af5a0ecd9284a3a8d07e23e6139bb8cfe593264b649d5e7cb18398",
     "multisigName": "company",
-    "multisigAddress": "0x29a0d9642d4eab7e3da247890e9ab6e51085106c0f5b1925fbcd36a1ed769234",
+    "multisigAddress": "0x273b2e09634c5c6fcd25bc3918cc1f5da68afdbf758fa2e3f08bafe7f85585fb",
+    "threshold": 1,
+    "currentSignerCount": 1,
+    "proposer": "a",
+    "createdAt": "2025-11-03T10:06:29.405Z",
+    "status": "executed",
+    "data": {
+      "newSignerName": "b",
+      "newSignerAddress": "0x2d25986ff949bc42a379a0e6e363ce8b18eac6bae2cdb2e50b5dec4c889fdf17",
+      "newSignerPublicKeyX": "0x102a86f65b7ed44d773934cbee1e5e80fc6abe67a3f9009c6fc051df70888f11",
+      "newSignerPublicKeyY": "0x00f1ee38a6441e52fd8b056b459bfd0f1f152c3b463fbbd3bd9423b644664c62"
+    }
+  },
+  {
+    "id": "change_threshold-1762164548902",
+    "type": "change_threshold",
+    "messageHash": "0x21ccd234c33fb89ca21a50b3b18ee2c50f61a709cb3cb5a8a22c577ac08f93a7",
+    "multisigName": "company",
+    "multisigAddress": "0x273b2e09634c5c6fcd25bc3918cc1f5da68afdbf758fa2e3f08bafe7f85585fb",
     "threshold": 1,
     "currentSignerCount": 2,
     "proposer": "a",
-    "createdAt": "2025-10-28T14:25:52.765Z",
-    "status": "executed",
-    "data": {
-      "newSignerName": "c",
-      "newSignerAddress": "0x301ab300bd877927a9114bf29e623cadd8b3e027262cceff5324269007edbef2",
-      "newSignerPublicKeyX": "0x25f37e0e0e2857a19fffb4ec549db742e619861a9fe74e337eb153f41baab5a6",
-      "newSignerPublicKeyY": "0x04860e02b2ab487a50f0b5b9f7a0ee6ca77ce594d1f9b3d169f3cc7e7ed6a649"
-    }
-  },
-  {
-    "id": "change_threshold-1761661629719",
-    "type": "change_threshold",
-    "messageHash": "0x031d44a7c4cf4ded8d79e6a8656a612242f0dd818d6017e9a47cdbe02fedb525",
-    "multisigName": "company",
-    "multisigAddress": "0x29a0d9642d4eab7e3da247890e9ab6e51085106c0f5b1925fbcd36a1ed769234",
-    "threshold": 1,
-    "currentSignerCount": 3,
-    "proposer": "a",
-    "createdAt": "2025-10-28T14:27:09.719Z",
+    "createdAt": "2025-11-03T10:09:08.902Z",
     "status": "executed",
     "data": {
       "newThreshold": 2
-    }
-  },
-  {
-    "id": "remove_signer-1761661700492",
-    "type": "remove_signer",
-    "messageHash": "0x206a5a87aee389e429b79d0d2725bae97666b2362f12d3385858c3f7e1208453",
-    "multisigName": "company",
-    "multisigAddress": "0x29a0d9642d4eab7e3da247890e9ab6e51085106c0f5b1925fbcd36a1ed769234",
-    "threshold": 2,
-    "currentSignerCount": 3,
-    "proposer": "a",
-    "createdAt": "2025-10-28T14:28:20.492Z",
-    "status": "executed",
-    "data": {
-      "targetSignerName": "c",
-      "targetSignerAddress": "0x301ab300bd877927a9114bf29e623cadd8b3e027262cceff5324269007edbef2"
     }
   }
 ]
