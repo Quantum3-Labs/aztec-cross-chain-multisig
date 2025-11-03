@@ -4,7 +4,7 @@ enum NetworkType {
 }
 
 const NETWORK = process.env.NETWORK || NetworkType.DEVNET;
-const NODE_URL = "http://localhost:8080";
+const NODE_URL = "https://devnet.aztec-labs.com";
 const SECRET_KEY = process.env.SECRET_KEY || "0x111";
 const SALT = process.env.SALT || "0x222";
 const WORMHOLE_ADDRESS =

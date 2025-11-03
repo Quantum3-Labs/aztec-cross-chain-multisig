@@ -1,35 +1,53 @@
 [
   {
-    "id": "add_signer-1762164389405",
+    "id": "add_signer-1762174982279",
     "type": "add_signer",
-    "messageHash": "0x1593556119af5a0ecd9284a3a8d07e23e6139bb8cfe593264b649d5e7cb18398",
+    "messageHash": "0x0982cb16e9e5439b75802d4cbf99c66ec12f7891cd06dbe932c9d4f2a3f2974d",
     "multisigName": "company",
-    "multisigAddress": "0x273b2e09634c5c6fcd25bc3918cc1f5da68afdbf758fa2e3f08bafe7f85585fb",
+    "multisigAddress": "0x16ec0e6af3c1c069953752b166c77126bb16dfd1d940f95a1cd64cfe8d44cf5f",
     "threshold": 1,
     "currentSignerCount": 1,
     "proposer": "a",
-    "createdAt": "2025-11-03T10:06:29.405Z",
+    "createdAt": "2025-11-03T13:03:02.279Z",
     "status": "executed",
     "data": {
       "newSignerName": "b",
-      "newSignerAddress": "0x2d25986ff949bc42a379a0e6e363ce8b18eac6bae2cdb2e50b5dec4c889fdf17",
-      "newSignerPublicKeyX": "0x102a86f65b7ed44d773934cbee1e5e80fc6abe67a3f9009c6fc051df70888f11",
-      "newSignerPublicKeyY": "0x00f1ee38a6441e52fd8b056b459bfd0f1f152c3b463fbbd3bd9423b644664c62"
+      "newSignerAddress": "0x01f041184bb104a893d51d66bc6e7053c2dc039ecc275d3cda3f0eac91418410",
+      "newSignerPublicKeyX": "0x0cc6487ac93946b46c9ce74d3a7cc85289cdd7f874a882d59ad2e2e2f3b0b30d",
+      "newSignerPublicKeyY": "0x13bd369b45194c7ac238cf0a1b46dd375af7feb317ea0ddcb05f2b1fe207b1d9"
     }
   },
   {
-    "id": "change_threshold-1762164548902",
+    "id": "change_threshold-1762175315311",
     "type": "change_threshold",
-    "messageHash": "0x21ccd234c33fb89ca21a50b3b18ee2c50f61a709cb3cb5a8a22c577ac08f93a7",
+    "messageHash": "0x18d8e580e520d569075eeabb9a3795c8aefa66d98e02dde64ce0ae91bb2b5136",
     "multisigName": "company",
-    "multisigAddress": "0x273b2e09634c5c6fcd25bc3918cc1f5da68afdbf758fa2e3f08bafe7f85585fb",
+    "multisigAddress": "0x16ec0e6af3c1c069953752b166c77126bb16dfd1d940f95a1cd64cfe8d44cf5f",
     "threshold": 1,
     "currentSignerCount": 2,
     "proposer": "a",
-    "createdAt": "2025-11-03T10:09:08.902Z",
+    "createdAt": "2025-11-03T13:08:35.311Z",
     "status": "executed",
     "data": {
       "newThreshold": 2
+    }
+  },
+  {
+    "id": "add_signer-1762175507182",
+    "type": "add_signer",
+    "messageHash": "0x18e62c5f6d4cea5050d5fad4d3072fbf293f26a8d592ee4d04dd75e0885ee241",
+    "multisigName": "company",
+    "multisigAddress": "0x16ec0e6af3c1c069953752b166c77126bb16dfd1d940f95a1cd64cfe8d44cf5f",
+    "threshold": 2,
+    "currentSignerCount": 2,
+    "proposer": "a",
+    "createdAt": "2025-11-03T13:11:47.182Z",
+    "status": "executed",
+    "data": {
+      "newSignerName": "c",
+      "newSignerAddress": "0x1aa4cc63c92a9321f7aeb0d918fcb170223ed7cff841e21fe2cb3642620852aa",
+      "newSignerPublicKeyX": "0x2a340c22b1750fd3a84e55a3bc085d82d50f3d7a0e7201f3beb3bd3b07caa645",
+      "newSignerPublicKeyY": "0x239db74d1f735e414cc69fb5599d8049f7b9855a4643e4b5e54d774583e42f5d"
     }
   }
 ]
