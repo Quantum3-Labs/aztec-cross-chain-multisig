@@ -1,22 +1,51 @@
 [
   {
-    "id": "cross_chain_intent-1761554459066",
-    "type": "cross_chain_intent",
-    "messageHash": "0x008070a37c9c2ba7396390737f3b511c5820746df9aa9eef27ec2df12dc55d03",
+    "id": "add_signer-1761661552765",
+    "type": "add_signer",
+    "messageHash": "0x0a02b49314037b22fb3f2fce8513851fe45b68accd5c704f4b91a7562011a67e",
     "multisigName": "company",
-    "multisigAddress": "0x11e22bdad63e91d6f5f035c8f9cf96776e674b2615882255d2122a59f396584d",
+    "multisigAddress": "0x29a0d9642d4eab7e3da247890e9ab6e51085106c0f5b1925fbcd36a1ed769234",
     "threshold": 1,
     "currentSignerCount": 2,
     "proposer": "a",
-    "createdAt": "2025-10-27T08:40:59.066Z",
+    "createdAt": "2025-10-28T14:25:52.765Z",
     "status": "executed",
     "data": {
-      "targetChain": "421614",
-      "targetContract": "0xd95D3C798908a2545D5848695d6f88F3839b7573",
-      "intentType": "1",
-      "amount": "10",
-      "recipient": "0x35340673E33eF796B9a2d00dB8B6A549205aabe4",
-      "deadline": "1761640858"
+      "newSignerName": "c",
+      "newSignerAddress": "0x301ab300bd877927a9114bf29e623cadd8b3e027262cceff5324269007edbef2",
+      "newSignerPublicKeyX": "0x25f37e0e0e2857a19fffb4ec549db742e619861a9fe74e337eb153f41baab5a6",
+      "newSignerPublicKeyY": "0x04860e02b2ab487a50f0b5b9f7a0ee6ca77ce594d1f9b3d169f3cc7e7ed6a649"
+    }
+  },
+  {
+    "id": "change_threshold-1761661629719",
+    "type": "change_threshold",
+    "messageHash": "0x031d44a7c4cf4ded8d79e6a8656a612242f0dd818d6017e9a47cdbe02fedb525",
+    "multisigName": "company",
+    "multisigAddress": "0x29a0d9642d4eab7e3da247890e9ab6e51085106c0f5b1925fbcd36a1ed769234",
+    "threshold": 1,
+    "currentSignerCount": 3,
+    "proposer": "a",
+    "createdAt": "2025-10-28T14:27:09.719Z",
+    "status": "executed",
+    "data": {
+      "newThreshold": 2
+    }
+  },
+  {
+    "id": "remove_signer-1761661700492",
+    "type": "remove_signer",
+    "messageHash": "0x206a5a87aee389e429b79d0d2725bae97666b2362f12d3385858c3f7e1208453",
+    "multisigName": "company",
+    "multisigAddress": "0x29a0d9642d4eab7e3da247890e9ab6e51085106c0f5b1925fbcd36a1ed769234",
+    "threshold": 2,
+    "currentSignerCount": 3,
+    "proposer": "a",
+    "createdAt": "2025-10-28T14:28:20.492Z",
+    "status": "executed",
+    "data": {
+      "targetSignerName": "c",
+      "targetSignerAddress": "0x301ab300bd877927a9114bf29e623cadd8b3e027262cceff5324269007edbef2"
     }
   }
 ]

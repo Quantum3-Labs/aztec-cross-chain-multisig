@@ -42,77 +42,77 @@ async function main() {
     console.log("signer2 address:", signer2.address);
     console.log("multisig address:", multisig.address);
 
-    await pxe.resetNoteSyncData();
+    // await pxe.resetNoteSyncData();
 
-    const notes = await pxe.getNotes({
-      contractAddress: AztecAddress.fromString(multisig.address.toString()),
-    });
-    console.log("notes:", notes);
+    // const notes = await pxe.getNotes({
+    //   contractAddress: AztecAddress.fromString(multisig.address.toString()),
+    // });
+    // console.log("notes:", notes);
 
-    const deadline = Math.floor(Date.now() / 1000) + 3600;
-    const messageHash = await poseidon2Hash([
-      Fr.fromString(signer2.address),
-      Fr.fromString(signer2.publicKeyX),
-      Fr.fromString(signer2.publicKeyY),
-      Fr.fromString(deadline.toString()),
-    ]);
-    const messageHash2 = await poseidon2Hash([
-      Fr.fromString(signer2.address),
-      Fr.fromString(signer1.publicKeyX),
-      Fr.fromString(signer1.publicKeyY),
-      Fr.fromString(deadline.toString()),
-    ]);
+    // const deadline = Math.floor(Date.now() / 1000) + 3600;
+    // const messageHash = await poseidon2Hash([
+    //   Fr.fromString(signer2.address),
+    //   Fr.fromString(signer2.publicKeyX),
+    //   Fr.fromString(signer2.publicKeyY),
+    //   Fr.fromString(deadline.toString()),
+    // ]);
+    // const messageHash2 = await poseidon2Hash([
+    //   Fr.fromString(signer2.address),
+    //   Fr.fromString(signer1.publicKeyX),
+    //   Fr.fromString(signer1.publicKeyY),
+    //   Fr.fromString(deadline.toString()),
+    // ]);
 
-    const signature = await signMessage(
-      messageHash,
-      toScalar(signer1.privateKey)
-    );
-    const signature2 = await signMessage(
-      messageHash2,
-      toScalar(signer1.privateKey)
-    );
+    // const signature = await signMessage(
+    //   messageHash,
+    //   toScalar(signer1.privateKey)
+    // );
+    // const signature2 = await signMessage(
+    //   messageHash2,
+    //   toScalar(signer1.privateKey)
+    // );
 
-    const tx = await multisig
-      .withWallet(sharedStateAccount.wallet)
-      .methods.add_signer(
-        messageHash,
-        AztecAddress.fromString(signer2.address),
-        toFr(signer2.publicKeyX),
-        toFr(signer2.publicKeyY),
-        [
-          ...Array(1).fill({
-            signature: signature,
-            owner: AztecAddress.fromString(signer1.address),
-          }),
-          ...Array(7).fill({
-            signature: [...Array(64).fill(0)],
-            owner: AztecAddress.ZERO,
-          }),
-        ]
-      )
-      .send({ from: AztecAddress.fromString(sharedStateAccount.address), fee })
-      .wait();
+    // const tx = await multisig
+    //   .withWallet(sharedStateAccount.wallet)
+    //   .methods.add_signer(
+    //     messageHash,
+    //     AztecAddress.fromString(signer2.address),
+    //     toFr(signer2.publicKeyX),
+    //     toFr(signer2.publicKeyY),
+    //     [
+    //       ...Array(1).fill({
+    //         signature: signature,
+    //         owner: AztecAddress.fromString(signer1.address),
+    //       }),
+    //       ...Array(7).fill({
+    //         signature: [...Array(64).fill(0)],
+    //         owner: AztecAddress.ZERO,
+    //       }),
+    //     ]
+    //   )
+    //   .send({ from: AztecAddress.fromString(sharedStateAccount.address), fee })
+    //   .wait();
 
-    await pxe.resetNoteSyncData();
-    await pxe.getNotes({
-      contractAddress: AztecAddress.fromString(multisig.address.toString()),
-    });
+    // await pxe.resetNoteSyncData();
+    // await pxe.getNotes({
+    //   contractAddress: AztecAddress.fromString(multisig.address.toString()),
+    // });
 
-    // read is signer for signer2
-    const isSigner = await multisig.methods
-      .is_address_signer(AztecAddress.fromString(signer2.address))
-      .simulate({
-        from: AztecAddress.fromString(sharedStateAccount.address),
-      });
-    console.log("is signer:", isSigner);
+    // // read is signer for signer2
+    // const isSigner = await multisig.methods
+    //   .is_address_signer(AztecAddress.fromString(signer2.address))
+    //   .simulate({
+    //     from: AztecAddress.fromString(sharedStateAccount.address),
+    //   });
+    // console.log("is signer:", isSigner);
 
-    await multisig
-      .withWallet(sharedStateAccount.wallet)
-      .methods.sync_private_state()
-      .simulate({
-        from: AztecAddress.fromString(sharedStateAccount.address),
-        fee,
-      });
+    // await multisig
+    //   .withWallet(sharedStateAccount.wallet)
+    //   .methods.sync_private_state()
+    //   .simulate({
+    //     from: AztecAddress.fromString(sharedStateAccount.address),
+    //     fee,
+    //   });
 
     // remove signer2 from multisig
     // const removeSignerTx = await multisig
@@ -152,26 +152,26 @@ async function main() {
     // console.log("is signer again:", isSignerAgain);
 
     // change threshold
-    const changeThresholdTx = await multisig
-      .withWallet(sharedStateAccount.wallet)
-      .methods.change_threshold(messageHash2, 2, [
-        ...Array(1).fill({
-          signature: signature2,
-          owner: AztecAddress.fromString(signer1.address),
-        }),
-        ...Array(7).fill({
-          signature: [...Array(64).fill(0)],
-          owner: AztecAddress.ZERO,
-        }),
-      ])
-      .send({ from: AztecAddress.fromString(sharedStateAccount.address), fee })
-      .wait();
+    // const changeThresholdTx = await multisig
+    //   .withWallet(sharedStateAccount.wallet)
+    //   .methods.change_threshold(messageHash2, 2, [
+    //     ...Array(1).fill({
+    //       signature: signature2,
+    //       owner: AztecAddress.fromString(signer1.address),
+    //     }),
+    //     ...Array(7).fill({
+    //       signature: [...Array(64).fill(0)],
+    //       owner: AztecAddress.ZERO,
+    //     }),
+    //   ])
+    //   .send({ from: AztecAddress.fromString(sharedStateAccount.address), fee })
+    //   .wait();
 
-    // read threshold
-    const threshold = await multisig.methods.get_threshold().simulate({
-      from: AztecAddress.fromString(sharedStateAccount.address),
-    });
-    console.log("threshold:", threshold);
+    // // read threshold
+    // const threshold = await multisig.methods.get_threshold().simulate({
+    //   from: AztecAddress.fromString(sharedStateAccount.address),
+    // });
+    // console.log("threshold:", threshold);
 
     await store.delete();
   } catch (error) {
