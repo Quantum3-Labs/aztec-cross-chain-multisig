@@ -24,9 +24,11 @@ import {
   toAddress,
   toFr,
   toScalar,
+  registerSignersInWallet,
 } from "./utils";
 import { SALT, SECRET_KEY, WORMHOLE_ADDRESS } from "./constants";
 import { setupPXE } from "./setup_pxe";
+import { setupPXEForSigner } from "./src/pxe-manager";
 import { setupSponsoredFPC } from "./sponsored_fpc";
 import { MultisigAccountContract } from "../aztec-contracts/src/artifacts/MultisigAccount";
 import {
@@ -36,8 +38,6 @@ import {
   getProposalStatus,
   listPendingProposals,
   cleanupExecutedProposal,
-  Proposal,
-  Signature,
   AddSignerData,
   RemoveSignerData,
   ChangeThresholdData,
@@ -47,6 +47,17 @@ import { Fr } from "@aztec/foundation/fields";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 const program = new Command();
+
+function requireSignerInMultisig(currentSigner: Signer, currentMultisig: any) {
+  if (!currentMultisig.signers.includes(currentSigner.name)) {
+    const available = currentMultisig.signers.length
+      ? currentMultisig.signers.join(", ")
+      : "(no signers registered)";
+    throw new Error(
+      `Current signer "${currentSigner.name}" is not a signer of multisig "${currentMultisig.name}". Switch to one of: ${available}`
+    );
+  }
+}
 
 program
   .name("multisig")
@@ -61,13 +72,22 @@ program
   .command("create-signer")
   .description("Create a new signer and add it to the signer registry")
   .argument("[name]", "Name for the signer", "Signer")
-  .action(async (name) => {
+  .option("--local", "Use shared PXE storage instead of signer-specific PXE")
+  .action(async (name, options) => {
     try {
-      const signer = await createSigner(name);
+      const useSharedPXE = Boolean(options?.local);
+      const signer = await createSigner(name, useSharedPXE);
       console.log(chalk.green(`✓ Created signer: ${name}`));
       console.log(chalk.white(`  Private Key: ${signer.privateKey}`));
       console.log(chalk.white(`  Public Key X: ${signer.publicKeyX}`));
       console.log(chalk.white(`  Public Key Y: ${signer.publicKeyY}`));
+      if (useSharedPXE) {
+        console.log(
+          chalk.yellow(
+            "  Using shared PXE storage (--local). For production, omit --local to mimic separate signer PXEs."
+          )
+        );
+      }
     } catch (error) {
       console.error(chalk.red("Error creating signer:"), error);
       process.exit(1);
@@ -177,9 +197,11 @@ program
       // get current caller and multisig info
       const currentSigner = (await getCurrentSigner()) as Signer;
       const currentMultisig = await getCurrentMultisig();
-      if (!currentSigner || !currentMultisig) {
-        throw new Error("No current signer or multisig");
+      if (!currentMultisig || !currentSigner) {
+        throw new Error("No current multisig or signer");
       }
+
+      requireSignerInMultisig(currentSigner, currentMultisig);
 
       console.log(
         `${chalk.white("Message Hash:")} ${chalk.yellow(
@@ -189,8 +211,9 @@ program
 
       spinner.text = "Loading contract...";
 
-      // Ensure the signer account is properly registered
-      const { wallet } = await setupPXE();
+      // Use signer-specific PXE
+      const { wallet } = await setupPXEForSigner(currentSigner);
+      await registerSignersInWallet(wallet, currentMultisig.signers);
       const accountMgr = await getOrCreateSignerAccount(wallet, currentSigner);
       const contractAddress = toAddress(currentMultisig.address);
 
@@ -206,7 +229,7 @@ program
       const recipientAddr = ethToAztecAddress(recipient);
 
       spinner.text = "Publishing to Wormhole...";
-      const fee = await setupSponsoredFPC();
+      const fee = await setupSponsoredFPC(wallet);
 
       // Retry mechanism for note sync
       let lastError: any;
@@ -230,8 +253,10 @@ program
             `Publishing to Wormhole (attempt ${attempt}/${maxAttempts})...`
           );
 
-          // CRITICAL: Contract signature is (message_hash, target_chain, target_contract, intent_type, amount, recipient)
-          // NO nonce parameter!
+          // Set deadline to 5 minutes from now
+          const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 minutes = 300 seconds
+
+          // CRITICAL: Contract signature is (message_hash, target_chain, target_contract, intent_type, amount, recipient, wormhole_address, deadline, signatures)
           const tx = await contract.methods
             .execute_cross_chain_intent(
               messageHash,
@@ -241,6 +266,7 @@ program
               amountFr,
               recipientAddr,
               AztecAddress.fromString(WORMHOLE_ADDRESS),
+              deadline,
               []
             )
             .send({ from: accountMgr.address, fee })
@@ -318,6 +344,11 @@ program
         throw new Error("No current multisig or signer set");
       }
 
+      requireSignerInMultisig(currentSigner, currentMultisig);
+
+      // Set deadline to 5 minutes from now
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 minutes = 300 seconds
+
       spinner.text = "Creating new signer...";
 
       // find signer in signers.json
@@ -333,7 +364,8 @@ program
         signerName,
         newSigner.address,
         newSigner.publicKeyX,
-        newSigner.publicKeyY
+        newSigner.publicKeyY,
+        deadline.toString()
       );
 
       spinner.succeed("Proposal created!");
@@ -343,6 +375,13 @@ program
       console.log(chalk.white(`   Message Hash: ${proposal.messageHash}`));
       console.log(chalk.white(`   New Signer: ${signerName}`));
       console.log(chalk.white(`   New Signer Address: ${newSigner.address}`));
+      console.log(
+        chalk.white(
+          `   Deadline: ${deadline} (${new Date(
+            Number(deadline) * 1000
+          ).toISOString()})`
+        )
+      );
       console.log(chalk.white(`   Threshold: ${proposal.threshold}`));
       console.log(chalk.cyan("\n💡 Next steps:"));
       console.log(
@@ -351,6 +390,11 @@ program
       console.log(
         chalk.white(
           `   2. Each signer runs: yarn dev sign-proposal --message-hash ${proposal.messageHash}`
+        )
+      );
+      console.log(
+        chalk.white(
+          `   3. Once threshold is met, run: yarn dev execute-add-signer --message-hash ${proposal.messageHash}`
         )
       );
       console.log(chalk.cyan("═".repeat(70)) + "\n");
@@ -381,6 +425,11 @@ program
         throw new Error("No current multisig or signer set");
       }
 
+      requireSignerInMultisig(currentSigner, currentMultisig);
+
+      // Set deadline to 5 minutes from now
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 minutes = 300 seconds
+
       spinner.text = "Finding signer to remove...";
 
       // Find signer in signers.json
@@ -408,7 +457,8 @@ program
       const { proposeRemoveSigner } = await import("./src/proposal-manager");
       const proposal = await proposeRemoveSigner(
         signerName,
-        targetSigner.address
+        targetSigner.address,
+        deadline.toString()
       );
 
       spinner.succeed("Proposal created!");
@@ -419,6 +469,13 @@ program
       console.log(chalk.white(`   Target Signer: ${signerName}`));
       console.log(
         chalk.white(`   Target Signer Address: ${targetSigner.address}`)
+      );
+      console.log(
+        chalk.white(
+          `   Deadline: ${deadline} (${new Date(
+            Number(deadline) * 1000
+          ).toISOString()})`
+        )
       );
       console.log(chalk.white(`   Threshold: ${proposal.threshold}`));
       console.log(chalk.white(`   Remaining Signers: ${remainingSigners}`));
@@ -464,6 +521,8 @@ program
         throw new Error("No current multisig or signer set");
       }
 
+      requireSignerInMultisig(currentSigner, currentMultisig);
+
       const newThreshold = parseInt(newThresholdStr);
       if (isNaN(newThreshold) || newThreshold < 1) {
         throw new Error("New threshold must be a positive number");
@@ -482,10 +541,16 @@ program
         );
       }
 
+      // Set deadline to 5 minutes from now
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 minutes = 300 seconds
+
       spinner.text = "Creating proposal...";
 
       const { proposeChangeThreshold } = await import("./src/proposal-manager");
-      const proposal = await proposeChangeThreshold(newThreshold);
+      const proposal = await proposeChangeThreshold(
+        newThreshold,
+        deadline.toString()
+      );
 
       spinner.succeed("Proposal created!");
 
@@ -498,6 +563,13 @@ program
       console.log(chalk.white(`   New Threshold: ${newThreshold}`));
       console.log(
         chalk.white(`   Total Signers: ${currentMultisig.signers.length}`)
+      );
+      console.log(
+        chalk.white(
+          `   Deadline: ${deadline} (${new Date(
+            Number(deadline) * 1000
+          ).toISOString()})`
+        )
       );
       console.log(chalk.cyan("\n💡 Next steps:"));
       console.log(
@@ -542,6 +614,8 @@ program
         throw new Error("No current multisig or signer set");
       }
 
+      requireSignerInMultisig(currentSigner, currentMultisig);
+
       // Validate amount
       const amount = parseInt(opts.amount);
       if (isNaN(amount) || amount < 0) {
@@ -560,11 +634,11 @@ program
       // Use fixed values: target chain is always 421614 (Arbitrum Sepolia),
       // target contract is the current multisig's Arbitrum proxy,
       // intent type is always 1 (TRANSFER),
-      // and deadline is always 24 hours from now
+      // and deadline is 5 minutes from now
       const targetChain = "421614";
       const targetContract = currentMultisig.arbitrumProxy;
       const intentType = "1"; // Always TRANSFER
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400); // 24 hours from now
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); // 5 minutes = 300 seconds
 
       const proposal = await proposeCrossChainIntent(
         targetChain,
@@ -653,8 +727,33 @@ program
 
       // Check if threshold is met
       const updatedStatus = getProposalStatus(opts.messageHash);
-      if (updatedStatus.signatures.length >= proposal.threshold) {
+      const thresholdMet =
+        updatedStatus.signatures.length >= proposal.threshold;
+      if (thresholdMet) {
         console.log(chalk.yellow("\n🎉 Threshold reached! Ready to execute."));
+      }
+
+      console.log(chalk.cyan("\n💡 Next steps:"));
+      if (thresholdMet) {
+        const executeCommands: Record<string, string> = {
+          add_signer: `yarn dev execute-add-signer --message-hash ${opts.messageHash}`,
+          remove_signer: `yarn dev execute-remove-signer --message-hash ${opts.messageHash}`,
+          change_threshold: `yarn dev execute-change-threshold --message-hash ${opts.messageHash}`,
+          cross_chain_intent: `yarn dev execute-cross-chain-intent --message-hash ${opts.messageHash}`,
+        };
+        const executeCommand =
+          executeCommands[proposal.type] ??
+          "Review proposal type to determine the correct execute command.";
+        console.log(chalk.white(`   1. Run: ${executeCommand}`));
+      } else {
+        console.log(
+          chalk.white("   1. Share the message hash with remaining signers")
+        );
+        console.log(
+          chalk.white(
+            `   2. Ask remaining signers to run: yarn dev sign-proposal --message-hash ${opts.messageHash}`
+          )
+        );
       }
 
       console.log(chalk.cyan("═".repeat(70)) + "\n");
@@ -676,9 +775,6 @@ program
   .action(async (opts) => {
     const spinner = ora("Executing add signer...").start();
     try {
-      const { wallet } = await setupPXE();
-
-      console.log("accounts:", await wallet.getAccounts());
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE ADD SIGNER"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -709,6 +805,12 @@ program
       if (!currentSigner || !currentMultisig) {
         throw new Error("No current signer or multisig set");
       }
+
+      requireSignerInMultisig(currentSigner, currentMultisig);
+
+      // Use signer-specific PXE
+      const { wallet } = await setupPXEForSigner(currentSigner);
+      await registerSignersInWallet(wallet, currentMultisig.signers);
 
       // get current multisig shared state account
       const sharedStateAccount = await getSharedStateAccount(
@@ -747,15 +849,17 @@ program
 
       spinner.text = "Executing add signer transaction...";
 
-      const fee = await setupSponsoredFPC();
+      const fee = await setupSponsoredFPC(wallet);
 
       const proposalData = proposal.data as AddSignerData;
+      const deadline = BigInt(proposalData.deadline);
       const tx = await contract.methods
         .add_signer(
           Fr.fromString(opts.messageHash),
           AztecAddress.fromString(proposalData.newSignerAddress),
           Fr.fromString(proposalData.newSignerPublicKeyX),
           Fr.fromString(proposalData.newSignerPublicKeyY),
+          deadline,
           contractSignatures
         )
         .send({
@@ -774,6 +878,39 @@ program
       }
       multisig.signers.push(proposalData.newSignerName);
       await saveMultisig(multisig);
+
+      // Register shared state account and contract in the new signer's PXE
+      try {
+        console.log(
+          chalk.cyan(
+            `\nRegistering shared state account for ${proposalData.newSignerName}...`
+          )
+        );
+        const { wallet: newSignerWallet } = await setupPXEForSigner(
+          proposalData.newSignerName
+        );
+
+        await registerSignersInWallet(newSignerWallet, multisig.signers);
+
+        await getSharedStateAccount(currentMultisig.address, newSignerWallet);
+
+        await newSignerWallet.registerContract({
+          instance: contract.instance,
+          artifact: MultisigAccountContract.artifact,
+        });
+
+        console.log(
+          chalk.green(
+            `✓ Shared state account registered for ${proposalData.newSignerName}`
+          )
+        );
+      } catch (error) {
+        console.warn(
+          chalk.yellow(
+            `⚠ Warning: Could not register shared state for ${proposalData.newSignerName}: ${error}`
+          )
+        );
+      }
 
       spinner.succeed("Executed!");
 
@@ -810,8 +947,6 @@ program
   .action(async (opts) => {
     const spinner = ora("Executing remove signer...").start();
     try {
-      const { wallet } = await setupPXE();
-
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE REMOVE SIGNER"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -846,6 +981,12 @@ program
       if (!currentSigner || !currentMultisig) {
         throw new Error("No current signer or multisig set");
       }
+
+      requireSignerInMultisig(currentSigner, currentMultisig);
+
+      // Use signer-specific PXE
+      const { wallet } = await setupPXEForSigner(currentSigner);
+      await registerSignersInWallet(wallet, currentMultisig.signers);
 
       // get current multisig shared state account
       const sharedStateAccount = await getSharedStateAccount(
@@ -884,13 +1025,15 @@ program
 
       spinner.text = "Executing remove signer transaction...";
 
-      const fee = await setupSponsoredFPC();
+      const fee = await setupSponsoredFPC(wallet);
 
-      const proposalData = proposal.data as any;
+      const proposalData = proposal.data as RemoveSignerData;
+      const deadline = BigInt(proposalData.deadline);
       const tx = await contract.methods
         .remove_signer(
           Fr.fromString(opts.messageHash),
           AztecAddress.fromString(proposalData.targetSignerAddress),
+          deadline,
           contractSignatures
         )
         .send({
@@ -947,7 +1090,6 @@ program
   .action(async (opts) => {
     const spinner = ora("Executing change threshold...").start();
     try {
-      const { wallet } = await setupPXE();
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE CHANGE THRESHOLD"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -982,6 +1124,12 @@ program
       if (!currentSigner || !currentMultisig) {
         throw new Error("No current signer or multisig set");
       }
+
+      requireSignerInMultisig(currentSigner, currentMultisig);
+
+      // Use signer-specific PXE
+      const { wallet } = await setupPXEForSigner(currentSigner);
+      await registerSignersInWallet(wallet, currentMultisig.signers);
 
       // get current multisig shared state account
       const sharedStateAccount = await getSharedStateAccount(
@@ -1020,13 +1168,15 @@ program
 
       spinner.text = "Executing change threshold transaction...";
 
-      const fee = await setupSponsoredFPC();
+      const fee = await setupSponsoredFPC(wallet);
 
-      const proposalData = proposal.data as any;
+      const proposalData = proposal.data as ChangeThresholdData;
+      const deadline = BigInt(proposalData.deadline);
       const tx = await contract.methods
         .change_threshold(
           Fr.fromString(opts.messageHash),
           proposalData.newThreshold,
+          deadline,
           contractSignatures
         )
         .send({
@@ -1079,7 +1229,6 @@ program
   .action(async (opts) => {
     const spinner = ora("Executing cross-chain intent...").start();
     try {
-      const { wallet } = await setupPXE();
       console.log("\n" + chalk.cyan("═".repeat(70)));
       console.log(chalk.cyan.bold("EXECUTE CROSS-CHAIN INTENT"));
       console.log(chalk.cyan("═".repeat(70)));
@@ -1114,6 +1263,12 @@ program
       if (!currentSigner || !currentMultisig) {
         throw new Error("No current signer or multisig set");
       }
+
+      requireSignerInMultisig(currentSigner, currentMultisig);
+
+      // Use signer-specific PXE
+      const { wallet } = await setupPXEForSigner(currentSigner);
+      await registerSignersInWallet(wallet, currentMultisig.signers);
 
       // get current multisig shared state account
       const sharedStateAccount = await getSharedStateAccount(
@@ -1152,9 +1307,10 @@ program
 
       spinner.text = "Executing cross-chain intent transaction...";
 
-      const fee = await setupSponsoredFPC();
+      const fee = await setupSponsoredFPC(wallet);
 
       const proposalData = proposal.data as CrossChainIntentData;
+      const deadline = BigInt(proposalData.deadline);
       const tx = await contract.methods
         .execute_cross_chain_intent(
           Fr.fromString(opts.messageHash),
@@ -1164,6 +1320,7 @@ program
           Fr.fromString(proposalData.amount),
           ethToAztecAddress(proposalData.recipient),
           AztecAddress.fromString(WORMHOLE_ADDRESS),
+          deadline,
           contractSignatures
         )
         .send({
@@ -1503,6 +1660,9 @@ program
     try {
       console.log(chalk.cyan("🧹 Cleaning up all JSON files..."));
 
+      const fs = await import("fs");
+      const path = await import("path");
+
       const filesToRemove = [
         "signers.json",
         "multisigs.json",
@@ -1515,7 +1675,6 @@ program
       let removedCount = 0;
       for (const file of filesToRemove) {
         try {
-          const fs = await import("fs");
           if (fs.existsSync(file)) {
             fs.unlinkSync(file);
             console.log(chalk.green(`✓ Removed ${file}`));
@@ -1528,9 +1687,14 @@ program
         }
       }
 
-      // setup pxe then remove store
-      const { store } = await setupPXE();
-      await store.delete();
+      // Remove all PXE stores (shared and per-signer)
+      const storePath = path.resolve(process.cwd(), "store");
+      if (fs.existsSync(storePath)) {
+        fs.rmSync(storePath, { recursive: true, force: true });
+        console.log(chalk.green(`✓ Removed store directory (${storePath})`));
+      } else {
+        console.log(chalk.gray(`- store directory (not found)`));
+      }
 
       console.log("");
       console.log(

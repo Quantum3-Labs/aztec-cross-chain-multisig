@@ -12,13 +12,18 @@ pub contract MultisigAccount {
         context::PrivateContext,
         macros::{functions::{external, initializer}, storage::storage},
         messages::message_delivery::MessageDelivery,
-        protocol_types::{address::AztecAddress, traits::ToField},
+        protocol_types::{
+            address::AztecAddress,
+            hash::poseidon2_hash,
+            traits::{Deserialize, FromField, Serialize, ToField},
+        },
         state_vars::{map::Map, PrivateImmutable, PrivateMutable},
     };
     use dep::schnorr;
+    use dep::std;
     use dep::std::embedded_curve_ops::EmbeddedCurvePoint;
     use dep::value_note::value_note::ValueNote;
-    // use dep::wormhole::Wormhole;
+    use dep::wormhole::Wormhole;
 
     global ACCOUNT_MAX_SIGNERS: u32 = 8;
 
@@ -100,6 +105,7 @@ pub contract MultisigAccount {
         new_signer: AztecAddress,
         new_signer_pk_x: Field,
         new_signer_pk_y: Field,
+        deadline: u64,
         signatures: [Signature; ACCOUNT_MAX_SIGNERS],
     ) {
         let is_message_initialized = unsafe { is_message_initialized(message_hash) };
@@ -109,6 +115,15 @@ pub contract MultisigAccount {
         assert((new_signer_pk_x != 0) & (new_signer_pk_y != 0), "Invalid public key");
         assert(!is_message_initialized, "Message hash already executed");
         assert_is_master(caller, storage);
+
+        let calculated_message_hash = poseidon2_hash([
+            new_signer.to_field(),
+            new_signer_pk_x,
+            new_signer_pk_y,
+            deadline as Field,
+        ]);
+
+        assert(calculated_message_hash == message_hash, "Invalid message hash");
         assert_valid_signatures(caller, message_hash, signatures, storage);
 
         // check if is already a signer
@@ -164,6 +179,7 @@ pub contract MultisigAccount {
     fn remove_signer(
         message_hash: Field,
         target_signer: AztecAddress,
+        deadline: u64,
         signatures: [Signature; ACCOUNT_MAX_SIGNERS],
     ) {
         let caller = context.msg_sender().unwrap();
@@ -172,9 +188,12 @@ pub contract MultisigAccount {
 
         assert(!target_signer.is_zero(), "Cannot remove zero address as signer");
         assert_is_master(caller, storage);
-        assert_valid_signatures(caller, message_hash, signatures, storage);
         assert(is_already_signer, "Signer does not exist");
         assert(!is_message_initialized, "Message hash already executed");
+
+        let calculated_message_hash = poseidon2_hash([target_signer.to_field(), deadline as Field]);
+        assert(calculated_message_hash == message_hash, "Invalid message hash");
+        assert_valid_signatures(caller, message_hash, signatures, storage);
 
         // need to know after removing signer, if threshold is met
         let signer_count_note = storage.signer_count.get_note();
@@ -214,6 +233,7 @@ pub contract MultisigAccount {
     fn change_threshold(
         message_hash: Field,
         new_threshold: u32,
+        deadline: u64,
         signatures: [Signature; ACCOUNT_MAX_SIGNERS],
     ) {
         let caller = context.msg_sender().unwrap();
@@ -225,8 +245,11 @@ pub contract MultisigAccount {
             "New threshold must be less than or equal to the maximum number of signers",
         );
         assert_is_master(caller, storage);
-        assert_valid_signatures(caller, message_hash, signatures, storage);
         assert(!is_message_initialized, "Message hash already executed");
+
+        let calculated_message_hash = poseidon2_hash([new_threshold as Field, deadline as Field]);
+        assert(calculated_message_hash == message_hash, "Invalid message hash");
+        assert_valid_signatures(caller, message_hash, signatures, storage);
 
         // threshold must be less than or equal to signer count
         let signer_count_note = storage.signer_count.get_note();
@@ -264,6 +287,7 @@ pub contract MultisigAccount {
         amount: Field,
         recipient: AztecAddress,
         wormhole_address: AztecAddress,
+        deadline: u64,
         signatures: [Signature; ACCOUNT_MAX_SIGNERS],
     ) {
         let is_message_initialized = unsafe { is_message_initialized(message_hash) };
@@ -271,6 +295,16 @@ pub contract MultisigAccount {
 
         assert(!is_message_initialized, "Message hash already executed");
         assert_is_master(caller, storage);
+
+        let calculated_message_hash = poseidon2_hash([
+            target_chain,
+            target_contract.to_field(),
+            intent_type,
+            amount,
+            recipient.to_field(),
+            deadline as Field,
+        ]);
+        assert(calculated_message_hash == message_hash, "Invalid message hash");
         assert_valid_signatures(caller, message_hash, signatures, storage);
 
         // Construct payload: 8 Fields x 31 bytes = 248 bytes
@@ -328,9 +362,9 @@ pub contract MultisigAccount {
         }
 
         // Publish to Wormhole
-        // Wormhole::at(wormhole_address)
-        //     .publish_message_in_private(0, payload, 0, 1, context.msg_sender(), 0)
-        //     .call(&mut context);
+        // Wormhole::at(wormhole_address).publish_message_in_private(1, payload, 2, 2, caller, 0).call(
+        //     &mut context,
+        // );
 
         storage
             .executed_message_hashes

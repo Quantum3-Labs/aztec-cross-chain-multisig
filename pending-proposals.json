@@ -1,53 +1,57 @@
 [
   {
-    "id": "add_signer-1762174982279",
+    "id": "add_signer-1762508572163",
     "type": "add_signer",
-    "messageHash": "0x0982cb16e9e5439b75802d4cbf99c66ec12f7891cd06dbe932c9d4f2a3f2974d",
+    "messageHash": "0x06b104f5c559ceab21cee0f354508c01105754aff87f662806acab4de3135c82",
     "multisigName": "company",
-    "multisigAddress": "0x16ec0e6af3c1c069953752b166c77126bb16dfd1d940f95a1cd64cfe8d44cf5f",
-    "threshold": 1,
-    "currentSignerCount": 1,
-    "proposer": "a",
-    "createdAt": "2025-11-03T13:03:02.279Z",
-    "status": "executed",
-    "data": {
-      "newSignerName": "b",
-      "newSignerAddress": "0x01f041184bb104a893d51d66bc6e7053c2dc039ecc275d3cda3f0eac91418410",
-      "newSignerPublicKeyX": "0x0cc6487ac93946b46c9ce74d3a7cc85289cdd7f874a882d59ad2e2e2f3b0b30d",
-      "newSignerPublicKeyY": "0x13bd369b45194c7ac238cf0a1b46dd375af7feb317ea0ddcb05f2b1fe207b1d9"
-    }
-  },
-  {
-    "id": "change_threshold-1762175315311",
-    "type": "change_threshold",
-    "messageHash": "0x18d8e580e520d569075eeabb9a3795c8aefa66d98e02dde64ce0ae91bb2b5136",
-    "multisigName": "company",
-    "multisigAddress": "0x16ec0e6af3c1c069953752b166c77126bb16dfd1d940f95a1cd64cfe8d44cf5f",
-    "threshold": 1,
-    "currentSignerCount": 2,
-    "proposer": "a",
-    "createdAt": "2025-11-03T13:08:35.311Z",
-    "status": "executed",
-    "data": {
-      "newThreshold": 2
-    }
-  },
-  {
-    "id": "add_signer-1762175507182",
-    "type": "add_signer",
-    "messageHash": "0x18e62c5f6d4cea5050d5fad4d3072fbf293f26a8d592ee4d04dd75e0885ee241",
-    "multisigName": "company",
-    "multisigAddress": "0x16ec0e6af3c1c069953752b166c77126bb16dfd1d940f95a1cd64cfe8d44cf5f",
+    "multisigAddress": "0x286b76be686a0c43bfea7eb1e949d738769d588e2e8db23114919cb0d76a6fbb",
     "threshold": 2,
     "currentSignerCount": 2,
     "proposer": "a",
-    "createdAt": "2025-11-03T13:11:47.182Z",
+    "createdAt": "2025-11-07T09:42:52.163Z",
     "status": "executed",
     "data": {
       "newSignerName": "c",
-      "newSignerAddress": "0x1aa4cc63c92a9321f7aeb0d918fcb170223ed7cff841e21fe2cb3642620852aa",
-      "newSignerPublicKeyX": "0x2a340c22b1750fd3a84e55a3bc085d82d50f3d7a0e7201f3beb3bd3b07caa645",
-      "newSignerPublicKeyY": "0x239db74d1f735e414cc69fb5599d8049f7b9855a4643e4b5e54d774583e42f5d"
+      "newSignerAddress": "0x2d3ecd40c1b22d2d6bd5d154dc650dfa5985e0a4fda66247f88e057f1f988e99",
+      "newSignerPublicKeyX": "0x124c365a4624d6413ad0b2f76728de43fd0e735b412cad366ae7d8721d5de15b",
+      "newSignerPublicKeyY": "0x0c61ce174878c598241043fcfcb57eabad75614f0d9f9975f79f5765125ea7e5",
+      "deadline": "1762508872"
+    }
+  },
+  {
+    "id": "remove_signer-1762508641988",
+    "type": "remove_signer",
+    "messageHash": "0x238708b885666e0b1dd0a86e42803904ace9e2ef8b10115ce04fb3d0e1b8d3c5",
+    "multisigName": "company",
+    "multisigAddress": "0x286b76be686a0c43bfea7eb1e949d738769d588e2e8db23114919cb0d76a6fbb",
+    "threshold": 2,
+    "currentSignerCount": 3,
+    "proposer": "c",
+    "createdAt": "2025-11-07T09:44:01.988Z",
+    "status": "executed",
+    "data": {
+      "targetSignerName": "b",
+      "targetSignerAddress": "0x0e718fcef8058dcce2fe400d2956d58734bee72001a7f00bbf4d7b4d522cf773",
+      "deadline": "1762508941"
+    }
+  },
+  {
+    "id": "add_signer-1762508703991",
+    "type": "add_signer",
+    "messageHash": "0x055bb81e8d4d7b7d4dc8975b231144f94088b100f86ac276a55ef2231b96a5db",
+    "multisigName": "company",
+    "multisigAddress": "0x286b76be686a0c43bfea7eb1e949d738769d588e2e8db23114919cb0d76a6fbb",
+    "threshold": 2,
+    "currentSignerCount": 2,
+    "proposer": "b",
+    "createdAt": "2025-11-07T09:45:03.991Z",
+    "status": "pending",
+    "data": {
+      "newSignerName": "b",
+      "newSignerAddress": "0x0e718fcef8058dcce2fe400d2956d58734bee72001a7f00bbf4d7b4d522cf773",
+      "newSignerPublicKeyX": "0x1ce7d807f18012177ee02a7c52fc5c10caaec9c22cdba528feb9d6a6319a3520",
+      "newSignerPublicKeyY": "0x0430cf3a5caa24704b496d67e1c23b8c3dd68504daa97d5585b64313350bba81",
+      "deadline": "1762509003"
     }
   }
 ]

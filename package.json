@@ -12,22 +12,25 @@
     "compile": "cd ./aztec-contracts && aztec-nargo fmt && aztec-nargo compile"
   },
   "dependencies": {
-    "@aztec/accounts": "3.0.0-devnet.2",
-    "@aztec/aztec.js": "3.0.0-devnet.2",
-    "@aztec/constants": "3.0.0-devnet.2",
-    "@aztec/foundation": "3.0.0-devnet.2",
-    "@aztec/kv-store": "3.0.0-devnet.2",
-    "@aztec/test-wallet": "3.0.0-devnet.2",
-    "@aztec/noir-contracts.js": "3.0.0-devnet.2",
-    "@aztec/pxe": "3.0.0-devnet.2",
-    "@aztec/stdlib": "3.0.0-devnet.2",
+    "@aztec/accounts": "3.0.0-devnet.3",
+    "@aztec/aztec.js": "3.0.0-devnet.3",
+    "@aztec/constants": "3.0.0-devnet.3",
+    "@aztec/foundation": "3.0.0-devnet.3",
+    "@aztec/kv-store": "3.0.0-devnet.3",
+    "@aztec/test-wallet": "3.0.0-devnet.3",
+    "@aztec/noir-contracts.js": "3.0.0-devnet.3",
+    "@aztec/pxe": "3.0.0-devnet.3",
+    "@aztec/stdlib": "3.0.0-devnet.3",
     "@types/node": "^24.7.2",
+    "@types/ws": "^8.5.12",
     "chalk": "^5.6.2",
     "commander": "^12.0.0",
     "dotenv": "^16.4.5",
     "ora": "^9.0.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@koush/wrtc": "^0.5.9",
+    "ws": "^8.18.0"
   }
 }

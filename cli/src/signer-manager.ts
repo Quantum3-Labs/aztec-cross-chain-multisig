@@ -6,6 +6,7 @@ import { Grumpkin } from "@aztec/foundation/crypto";
 import { SALT, SECRET_KEY } from "../constants";
 import { toFr, toHex0x } from "../utils";
 import { setupPXE } from "../setup_pxe";
+import { setupPXEForSigner } from "./pxe-manager";
 import { setupSponsoredFPC } from "../sponsored_fpc";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 
@@ -69,14 +70,19 @@ function writeSigners(signers: Signer[]): void {
   fs.writeFileSync(SIGNERS_FILE, JSON.stringify(signers, null, 2));
 }
 
-export async function createSigner(name: string): Promise<Signer> {
+export async function createSigner(
+  name: string,
+  useSharedPXE = false
+): Promise<Signer> {
   const signers = readSigners();
 
   // Check if signer with this name already exists
   if (signers.some((s) => s.name === name)) {
     throw new Error(`Signer with name "${name}" already exists`);
   }
-  const { wallet } = await setupPXE();
+  const { wallet } = useSharedPXE
+    ? await setupPXE()
+    : await setupPXEForSigner(name);
 
   const privateKey = GrumpkinScalar.random();
   const grumpkin = new Grumpkin();
@@ -88,7 +94,7 @@ export async function createSigner(name: string): Promise<Signer> {
     toFr(SALT),
     privateKey
   );
-  const fee = await setupSponsoredFPC();
+  const fee = await setupSponsoredFPC(wallet);
   await (await newAccount.getDeployMethod())
     .send({ from: AztecAddress.ZERO, fee: fee })
     .wait();

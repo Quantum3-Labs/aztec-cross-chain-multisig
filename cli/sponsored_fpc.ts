@@ -6,6 +6,7 @@ import {
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee/testing";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { setupPXE } from "./setup_pxe";
+import { TestWallet } from "@aztec/test-wallet/server";
 
 const SPONSORED_FPC_SALT = new Fr(0);
 
@@ -18,8 +19,8 @@ export async function getSponsoredFPCInstance(): Promise<ContractInstanceWithAdd
   );
 }
 
-export async function setupSponsoredFPC() {
-  const { wallet } = await setupPXE();
+export async function setupSponsoredFPC(existingWallet?: TestWallet) {
+  const wallet = existingWallet ?? (await setupPXE()).wallet;
 
   const sponsoredFPC = await getSponsoredFPCInstance();
   await wallet.registerContract({

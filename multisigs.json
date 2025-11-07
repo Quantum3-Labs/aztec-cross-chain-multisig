@@ -1,20 +1,19 @@
 [
   {
     "name": "company",
-    "address": "0x16ec0e6af3c1c069953752b166c77126bb16dfd1d940f95a1cd64cfe8d44cf5f",
+    "address": "0x286b76be686a0c43bfea7eb1e949d738769d588e2e8db23114919cb0d76a6fbb",
     "threshold": 2,
     "signers": [
       "a",
-      "b",
       "c"
     ],
-    "createdAt": "2025-11-03T10:15:51.037Z",
-    "sharedStateAccountAddress": "0x09ba778bc2979959791f71d425873cb68f02ee0e464d8f79e1bb3f0fb6acdc7e",
-    "sharedStateAccountSecretKey": "0x22fc2ad98b9494c7d172f4fddbfe2cadf748b6542ce4aa06313e6c3f45186729",
-    "sharedStateAccountSaltKey": "0x14f7b25c0f38c81507c492a6231c159def96f660677af67f50098a89234f2988",
-    "sharedStateAccountPublicKeyX": "0x0251207b3659e9f7eaa4cfff92830398d7c905e2870cfe4eb072598726e8f5e1",
-    "sharedStateAccountPublicKeyY": "0x2e4d4bc85180ab0692e5d06940f0dc0a14d1d25a32edac43feb5055c507dd6f7",
-    "sharedStateAccountPrivateKey": "0x01cc94346ae4f386bd2315445b3075468ba6d8719ef92c54d339b2357112579d",
-    "arbitrumProxy": "0xCe9B507A4CbdfaA6e919dbe81e6485B6fE75b32C"
+    "createdAt": "2025-11-07T09:40:59.156Z",
+    "sharedStateAccountAddress": "0x1f1784c3d669f20bde52e3a8a8f73ffdd448ab0c42bc7a1435ceace36e516aa8",
+    "sharedStateAccountSecretKey": "0x22d8ba30b9dc91cf0e3f0edf4dbe917e83e85f7365127f9f3ab8d0ec81cd1ef8",
+    "sharedStateAccountSaltKey": "0x07361e638b97217445db20df6345a8730dde5ae2e439c0b578f8ea8d8113a2e2",
+    "sharedStateAccountPublicKeyX": "0x07ec65d4dc1a4b3947b09aa4420711cc516c4fdafa7a735b63cf13f298db1901",
+    "sharedStateAccountPublicKeyY": "0x22d7883aeb24cfc3c7be81e3f630ace0ee1e784edef0fb50ce0e3ff61497ea88",
+    "sharedStateAccountPrivateKey": "0x1d4de81ae3b575dc53f8febf57870055d2dfbcb3fe1c9a7bc43b611a3c7c4bc5",
+    "arbitrumProxy": "0x233644bb7b4d8F9578A7CC92bE938eEB26983356"
   }
 ]

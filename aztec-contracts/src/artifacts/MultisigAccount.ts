@@ -120,17 +120,17 @@ executed_message_hashes: {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** add_signer(message_hash: field, new_signer: struct, new_signer_pk_x: field, new_signer_pk_y: field, signatures: array) */
-    add_signer: ((message_hash: FieldLike, new_signer: AztecAddressLike, new_signer_pk_x: FieldLike, new_signer_pk_y: FieldLike, signatures: { signature: (bigint | number)[], owner: AztecAddressLike }[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** add_signer(message_hash: field, new_signer: struct, new_signer_pk_x: field, new_signer_pk_y: field, deadline: integer, signatures: array) */
+    add_signer: ((message_hash: FieldLike, new_signer: AztecAddressLike, new_signer_pk_x: FieldLike, new_signer_pk_y: FieldLike, deadline: (bigint | number), signatures: { signature: (bigint | number)[], owner: AztecAddressLike }[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** change_threshold(message_hash: field, new_threshold: integer, signatures: array) */
-    change_threshold: ((message_hash: FieldLike, new_threshold: (bigint | number), signatures: { signature: (bigint | number)[], owner: AztecAddressLike }[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** change_threshold(message_hash: field, new_threshold: integer, deadline: integer, signatures: array) */
+    change_threshold: ((message_hash: FieldLike, new_threshold: (bigint | number), deadline: (bigint | number), signatures: { signature: (bigint | number)[], owner: AztecAddressLike }[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** constructor(signers: array, initial_threshold: integer, signers_pk_x: array, signers_pk_y: array) */
     constructor: ((signers: AztecAddressLike[], initial_threshold: (bigint | number), signers_pk_x: FieldLike[], signers_pk_y: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** execute_cross_chain_intent(message_hash: field, target_chain: field, target_contract: struct, intent_type: field, amount: field, recipient: struct, wormhole_address: struct, signatures: array) */
-    execute_cross_chain_intent: ((message_hash: FieldLike, target_chain: FieldLike, target_contract: AztecAddressLike, intent_type: FieldLike, amount: FieldLike, recipient: AztecAddressLike, wormhole_address: AztecAddressLike, signatures: { signature: (bigint | number)[], owner: AztecAddressLike }[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** execute_cross_chain_intent(message_hash: field, target_chain: field, target_contract: struct, intent_type: field, amount: field, recipient: struct, wormhole_address: struct, deadline: integer, signatures: array) */
+    execute_cross_chain_intent: ((message_hash: FieldLike, target_chain: FieldLike, target_contract: AztecAddressLike, intent_type: FieldLike, amount: FieldLike, recipient: AztecAddressLike, wormhole_address: AztecAddressLike, deadline: (bigint | number), signatures: { signature: (bigint | number)[], owner: AztecAddressLike }[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_threshold() */
     get_threshold: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -150,8 +150,8 @@ executed_message_hashes: {
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** remove_signer(message_hash: field, target_signer: struct, signatures: array) */
-    remove_signer: ((message_hash: FieldLike, target_signer: AztecAddressLike, signatures: { signature: (bigint | number)[], owner: AztecAddressLike }[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** remove_signer(message_hash: field, target_signer: struct, deadline: integer, signatures: array) */
+    remove_signer: ((message_hash: FieldLike, target_signer: AztecAddressLike, deadline: (bigint | number), signatures: { signature: (bigint | number)[], owner: AztecAddressLike }[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** sync_private_state() */
     sync_private_state: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

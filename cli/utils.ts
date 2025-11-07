@@ -1,6 +1,6 @@
 import { Fr, GrumpkinScalar, Point } from "@aztec/aztec.js/fields";
 import { setupPXE } from "./setup_pxe";
-import { listMultisigs, Signer } from "./src/signer-manager";
+import { listMultisigs, listSigners, Signer } from "./src/signer-manager";
 import { Grumpkin, Schnorr } from "@aztec/foundation/crypto";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { TestWallet } from "@aztec/test-wallet/server";
@@ -77,6 +77,74 @@ export async function getOrCreateSignerAccount(
   await wallet.registerSender(accountMgr.address);
 
   return accountMgr;
+}
+
+export async function registerSignersInWallet(
+  wallet: TestWallet,
+  signerNames: string[]
+) {
+  const allSigners = await listSigners();
+  const uniqueNames = Array.from(new Set(signerNames));
+
+  for (const name of uniqueNames) {
+    const signer = allSigners.find((s) => s.name === name);
+    if (!signer) {
+      console.warn(
+        `⚠ Signer ${name} not found in signers.json, skipping PXE registration.`
+      );
+      continue;
+    }
+    try {
+      await getOrCreateSignerAccount(wallet, signer);
+    } catch (error) {
+      console.warn(
+        `⚠ Failed to register signer ${name} in PXE: ${error}. Continuing with remaining signers.`
+      );
+    }
+  }
+}
+
+export async function registerSharedStateAccountInWallet(
+  wallet: TestWallet,
+  sharedState: {
+    address: string;
+    secretKey: any;
+    saltKey: any;
+    privateKey: string;
+  }
+) {
+  try {
+    const secretKeyStr =
+      typeof sharedState.secretKey === "string"
+        ? sharedState.secretKey
+        : sharedState.secretKey.toString();
+    const saltKeyStr =
+      typeof sharedState.saltKey === "string"
+        ? sharedState.saltKey
+        : sharedState.saltKey.toString();
+
+    const secretKeyFr = Fr.fromString(secretKeyStr);
+    const saltKeyFr = Fr.fromString(saltKeyStr);
+    const privateScalar = toScalar(sharedState.privateKey);
+
+    const accountMgr = await wallet.createSchnorrAccount(
+      secretKeyFr,
+      saltKeyFr,
+      privateScalar
+    );
+
+    try {
+      await wallet.registerSender(accountMgr.address);
+    } catch (error) {
+      // Ignore if already registered
+    }
+
+    return accountMgr;
+  } catch (error) {
+    throw new Error(
+      `Failed to register shared state account ${sharedState.address}: ${error}`
+    );
+  }
 }
 
 export async function getSharedStateAccount(

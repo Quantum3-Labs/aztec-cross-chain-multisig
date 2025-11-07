@@ -5,7 +5,7 @@ import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { setupSponsoredFPC } from "../../cli/sponsored_fpc";
 import { TestWallet } from "@aztec/test-wallet/server";
 export async function createSigner(wallet: TestWallet) {
-  const fee = await setupSponsoredFPC();
+  const fee = await setupSponsoredFPC(wallet);
 
   let secretKey = Fr.random();
   let signingKey = GrumpkinScalar.random();
