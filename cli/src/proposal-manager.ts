@@ -185,10 +185,10 @@ export async function createProposal(
       const recipientAddr = ethToAztecAddress(crossChainData.recipient);
       messageHash = await poseidon2Hash([
         Fr.fromString(crossChainData.targetChain),
-        Fr.fromString(targetContractAddr.toString()),
+        targetContractAddr,
         Fr.fromString(crossChainData.intentType),
         Fr.fromString(crossChainData.amount),
-        Fr.fromString(recipientAddr.toString()),
+        recipientAddr,
         Fr.fromString(crossChainData.deadline),
       ]);
       break;

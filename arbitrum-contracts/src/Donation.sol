@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./BridgeToken.sol";
+import {BridgeToken} from "./BridgeToken.sol";
 
 /**
  * @title Donation
@@ -16,7 +16,9 @@ contract Donation is BridgeToken {
      * @notice Constructor to set the receiver address
      * @param _receiver Address that will receive the donations
      */
-    constructor(address _receiver) BridgeToken("ProverToken", "PTZK", 1000000000000000000000) {
+    constructor(
+        address _receiver
+    ) BridgeToken("ProverToken", "PTZK", 1000000000000000000000) {
         receiver = _receiver;
     }
 
@@ -24,10 +26,10 @@ contract Donation is BridgeToken {
      * @notice Donate tokens to the receiver
      * @param amount Amount of tokens to donate (in wei units)
      */
-    function donate(uint256 amount) external {
+    function donate(uint256 amount, address receiver_) external {
         require(amount > 0, "Donation amount must be greater than zero");
 
-        _mint(receiver, amount);
+        _mint(receiver_, amount);
 
         emit DonationMade(receiver, amount);
     }

@@ -1,19 +1,66 @@
 [
   {
     "name": "company",
-    "address": "0x286b76be686a0c43bfea7eb1e949d738769d588e2e8db23114919cb0d76a6fbb",
-    "threshold": 2,
+    "address": "0x0c505e99b76eaa43907a8b0683cb3cf8a78f4bd37f29df88fdc200fc74758cc2",
+    "threshold": 1,
     "signers": [
-      "a",
-      "c"
+      "a"
     ],
-    "createdAt": "2025-11-07T09:40:59.156Z",
-    "sharedStateAccountAddress": "0x1f1784c3d669f20bde52e3a8a8f73ffdd448ab0c42bc7a1435ceace36e516aa8",
-    "sharedStateAccountSecretKey": "0x22d8ba30b9dc91cf0e3f0edf4dbe917e83e85f7365127f9f3ab8d0ec81cd1ef8",
-    "sharedStateAccountSaltKey": "0x07361e638b97217445db20df6345a8730dde5ae2e439c0b578f8ea8d8113a2e2",
-    "sharedStateAccountPublicKeyX": "0x07ec65d4dc1a4b3947b09aa4420711cc516c4fdafa7a735b63cf13f298db1901",
-    "sharedStateAccountPublicKeyY": "0x22d7883aeb24cfc3c7be81e3f630ace0ee1e784edef0fb50ce0e3ff61497ea88",
-    "sharedStateAccountPrivateKey": "0x1d4de81ae3b575dc53f8febf57870055d2dfbcb3fe1c9a7bc43b611a3c7c4bc5",
-    "arbitrumProxy": "0x233644bb7b4d8F9578A7CC92bE938eEB26983356"
+    "createdAt": "2025-11-28T06:45:15.576Z",
+    "sharedStateAccountAddress": "0x13bcd3ff4c802c1749fa477f9feeee8e066406e8c426a0455e2ddea91d623114",
+    "sharedStateAccountSecretKey": "0x2bf9fb6c316aa64b8e692471e6f598b0e1b49b109b898af67fd6b84dd80cfdd6",
+    "sharedStateAccountSaltKey": "0x0fa49e427231a707ad19b332bc5e446bc3e25378502c19ef64f02b1444c06efa",
+    "sharedStateAccountPublicKeyX": "0x2d7cd63a9bafa07cf4d34eb47ca005fd0f06e844ce09df6280389f1929a14528",
+    "sharedStateAccountPublicKeyY": "0x28b7ba565acff800d9e4f7416a3c8d963c76c74654401a987e6bad203840c6e7",
+    "sharedStateAccountPrivateKey": "0x033d3a310211e1c9b8133c8de7edac2eae293ede0efc0b893834eca34f653b38",
+    "arbitrumProxy": "0xf36aaEE83f01Aa9D115Be47447FAb0B73651BC7E"
+  },
+  {
+    "name": "company1",
+    "address": "0x2b9dc9fccdb1ef6d4fca4d45f01bef9036d7600e8e26b7f5b5735aaadb6f46c8",
+    "threshold": 1,
+    "signers": [
+      "a"
+    ],
+    "createdAt": "2025-11-28T07:29:38.590Z",
+    "sharedStateAccountAddress": "0x2e35627a7364797fc9d64432e73ed3b142ba87ba2be4a0ea28863fa642b8c6e3",
+    "sharedStateAccountSecretKey": "0x08f8a3f08abc5a573a2a96c1facb0251edbd52d6244158c3864f172bab0d1148",
+    "sharedStateAccountSaltKey": "0x0168efb2e56aadee2bf0deaff973ff2b193c7ad9aff2cfb973a166f2784ceba2",
+    "sharedStateAccountPublicKeyX": "0x13e32251a1058d7d78096de08160bb53494c28aa47a714bcee3f8b0c9ce3c02d",
+    "sharedStateAccountPublicKeyY": "0x1603fd581e651512a37f5059ba4fd39f935ff96f981c0dc4e8a15c04f9e6e363",
+    "sharedStateAccountPrivateKey": "0x20dfa4afc98508fa3483222b6fdb3e4dd1a16736d6e9e8637aae976e52d050bc",
+    "arbitrumProxy": "0x9F258b7Bf79025bAb5cFA166155f5B038AdEBA6F"
+  },
+  {
+    "name": "company2",
+    "address": "0x2bd6d43b49e9c0774af7867a318c76f23538b90f214876d667be704d31eb5bba",
+    "threshold": 1,
+    "signers": [
+      "a"
+    ],
+    "createdAt": "2025-11-28T07:56:38.603Z",
+    "sharedStateAccountAddress": "0x2c260b6ee1a962015efa261c6ccc4e622cb82b4cc1fe6998165f2b1901d74716",
+    "sharedStateAccountSecretKey": "0x0ab67c0a36aba01d08d285ca7863efdf85e4e942fefb22c8cad767ab7efa7ff4",
+    "sharedStateAccountSaltKey": "0x096db8bcd6426636492a7a9e77cbf925929567aadb4f400fa45de06a6ccc9717",
+    "sharedStateAccountPublicKeyX": "0x0477bb37eb872a84bf8abd594949d9b4e9886be82d79b83ba61af078678dbd1f",
+    "sharedStateAccountPublicKeyY": "0x11927bb7d696f0aaa7e0c196902affaeb41a38f9fbed19304db700e2a2672906",
+    "sharedStateAccountPrivateKey": "0x2c7e637589ccea822c2743c4e8af63f212567859fc50cd3570ee4ff2f0fd9f29",
+    "arbitrumProxy": "0x5F991Bb52683824442599fbB5CE1e3950a3f1BD7"
+  },
+  {
+    "name": "company3",
+    "address": "0x031063a58bb3f1f0c5d70cacbcfc122205c1882155ad722715d90a699046ea50",
+    "threshold": 1,
+    "signers": [
+      "a"
+    ],
+    "createdAt": "2025-11-28T08:59:40.890Z",
+    "sharedStateAccountAddress": "0x0c53cb0d52c231be5d2e5791c85a19fac6b3cae431bea97bd5d977542da2c6a6",
+    "sharedStateAccountSecretKey": "0x115057d912f7a8f98362e78b23568bdeb113c6f13a753857ddb1dcbe3aae6489",
+    "sharedStateAccountSaltKey": "0x0feb796be7af4c6c3afc81424aff081aac952671818d713cde354b2e23521ff1",
+    "sharedStateAccountPublicKeyX": "0x137891231b42cf59fce41267561c97d4d9e6d697584dc7f0c82eff2051c7fe56",
+    "sharedStateAccountPublicKeyY": "0x03072fddcbcf5aeefc70eefb5450dae4479e4f09518092010fd222b9cb825bf5",
+    "sharedStateAccountPrivateKey": "0x104f21bc26dadf94e7dd170cbe9ed7090c4e15729062345b732c122cdb517371",
+    "arbitrumProxy": "0x626Ea5383e40D743DFDdc94EB85d7bd6ddfFe3Eb"
   }
 ]

@@ -97,3 +97,54 @@ export async function getArbitrumProxy(
   const proxies = readProxies();
   return proxies.find((p) => p.multisigName === multisigName) || null;
 }
+
+export async function registerEmitter(
+  aztecAccountAddress: string,
+  vaultAddress?: string
+): Promise<void> {
+  console.log(
+    `📝 Registering emitter for Aztec account: ${aztecAccountAddress}`
+  );
+
+  const env = {
+    ...process.env,
+    ARBITRUM_INTENT_VAULT:
+      vaultAddress || process.env.ARBITRUM_INTENT_VAULT || "",
+    AZTEC_ACCOUNT_ADDRESS: aztecAccountAddress,
+    AZTEC_CHAIN_ID: "52", // Aztec chain ID in Wormhole
+    PRIVATE_KEY: process.env.PRIVATE_KEY || "",
+  };
+
+  // Validate required environment variables
+  if (!env.ARBITRUM_INTENT_VAULT) {
+    throw new Error(
+      "ARBITRUM_INTENT_VAULT environment variable is required. Set it or pass vaultAddress parameter."
+    );
+  }
+  if (!env.PRIVATE_KEY) {
+    throw new Error("PRIVATE_KEY environment variable is required");
+  }
+
+  try {
+    const command = `cd ${ARBITRUM_CONTRACTS_DIR} && forge script script/RegisterEmitter.s.sol --broadcast -vvvv --rpc-url https://sepolia-rollup.arbitrum.io/rpc`;
+
+    console.log("Executing emitter registration...");
+    const output = execSync(command, {
+      env,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+
+    console.log("Registration output:", output);
+
+    // Check for success message
+    if (output.includes("Emitter registered successfully!")) {
+      console.log(`✅ Emitter registered successfully!`);
+    } else {
+      throw new Error("Emitter registration may have failed - check output");
+    }
+  } catch (error) {
+    console.error("Error registering emitter:", error);
+    throw error;
+  }
+}

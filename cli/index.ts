@@ -26,7 +26,7 @@ import {
   toScalar,
   registerSignersInWallet,
 } from "./utils";
-import { SALT, SECRET_KEY, WORMHOLE_ADDRESS } from "./constants";
+import { NODE_URL, SALT, SECRET_KEY, WORMHOLE_ADDRESS } from "./constants";
 import { setupPXE } from "./setup_pxe";
 import { setupPXEForSigner } from "./src/pxe-manager";
 import { setupSponsoredFPC } from "./sponsored_fpc";
@@ -45,6 +45,13 @@ import {
 } from "./src/proposal-manager";
 import { Fr } from "@aztec/foundation/fields";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { Contract } from "@aztec/aztec.js/contracts";
+import { loadContractArtifact } from "@aztec/stdlib/abi";
+
+import WormholeJson from './wormhole/wormhole_contracts-Wormhole.json' with { type: 'json' };
+
+const WormholeContractArtifact = loadContractArtifact(WormholeJson);
 
 const program = new Command();
 
@@ -221,6 +228,8 @@ program
         contractAddress,
         wallet
       );
+
+     
 
       const targetChain = Fr.fromString("421614");
       const targetContract = ethToAztecAddress(currentMultisig.arbitrumProxy!);
@@ -1277,6 +1286,23 @@ program
       );
 
       const contractAddress = toAddress(currentMultisig.address);
+
+      const wormholeAddress = AztecAddress.fromString(WORMHOLE_ADDRESS);
+      console.log(
+        `🔗 Target Wormhole core contract: ${wormholeAddress.toString()}`
+      );
+      const nodeClient = createAztecNodeClient(NODE_URL);
+      const wormholeInstance = await nodeClient.getContract(wormholeAddress);
+      if (!wormholeInstance) {
+        throw new Error(
+          `No contract instance found at ${wormholeAddress.toString()}`
+        );
+      }
+
+      await wallet.registerContract({
+        instance: wormholeInstance,
+        artifact: WormholeContractArtifact,
+      });
 
       const contract = await MultisigAccountContract.at(
         contractAddress,

@@ -11,9 +11,9 @@ contract VerifySetup is Script {
         address donationAddress = vm.envAddress("DONATION_ADDRESS");
         uint16 aztecChainId = uint16(vm.envUint("AZTEC_CHAIN_ID"));
         bytes32 expectedEmitter = vm.envBytes32("AZTEC_ACCOUNT_ADDRESS");
-        
+
         console.log("=== Verifying Deployment ===\n");
-        
+
         // Verify Donation
         Donation donation = Donation(donationAddress);
         console.log("1. Donation Contract");
@@ -21,7 +21,7 @@ contract VerifySetup is Script {
         console.log("   Receiver:", donation.receiver());
         console.log("   Token:", donation.name(), donation.symbol());
         console.log("");
-        
+
         // Verify Vault
         ArbitrumIntentVault vault = ArbitrumIntentVault(vaultAddress);
         console.log("2. ArbitrumIntentVault");
@@ -31,9 +31,9 @@ contract VerifySetup is Script {
         console.log("   EVM Chain ID:", vault.evmChainId());
         console.log("   Donation:", address(vault.donationContract()));
         console.log("");
-        
+
         // Verify Emitter Registration
-        bytes32 registeredEmitter = vault.vaultContracts(aztecChainId);
+        bytes32 registeredEmitter = vault.getRegisteredEmitter(aztecChainId);
         console.log("3. Emitter Registration");
         console.log("   Aztec Chain ID:", aztecChainId);
         console.log("   Expected Emitter:");
@@ -41,8 +41,11 @@ contract VerifySetup is Script {
         console.log("   Registered Emitter:");
         console.logBytes32(registeredEmitter);
         console.log("");
-        
-        if (registeredEmitter == expectedEmitter && registeredEmitter != bytes32(0)) {
+
+        if (
+            registeredEmitter == expectedEmitter &&
+            registeredEmitter != bytes32(0)
+        ) {
             console.log("Status: VERIFIED");
         } else if (registeredEmitter == bytes32(0)) {
             console.log("Status: NOT REGISTERED - Run 'make register'");

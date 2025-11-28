@@ -308,63 +308,59 @@ pub contract MultisigAccount {
         assert_valid_signatures(caller, message_hash, signatures, storage);
 
         // Construct payload: 8 Fields x 31 bytes = 248 bytes
-        // [action=6, target_chain, target_contract, intent_type, amount, recipient, nonce, deadline]
+        // [target_chain, target_contract, intent_type, amount, recipient]
+
+        let caller = context.msg_sender().unwrap();
         let mut payload: [[u8; 31]; 8] = [[0; 31]; 8];
 
-        // Field 0: action = 6
-        let action_bytes = (6 as Field).to_be_bytes::<32>();
-        for i in 0..31 {
-            payload[0][i] = action_bytes[i + 1];
-        }
-
-        // Field 1: target_chain
+        // Field 0: target_chain
         let target_chain_bytes = target_chain.to_be_bytes::<32>();
         for i in 0..31 {
-            payload[1][i] = target_chain_bytes[i + 1];
+            payload[0][i] = target_chain_bytes[i + 1];
         }
 
-        // Field 2: target_contract
+        // Field 1: target_contract
         let target_contract_bytes = target_contract.to_field().to_be_bytes::<32>();
         for i in 0..31 {
-            payload[2][i] = target_contract_bytes[i + 1];
+            payload[1][i] = target_contract_bytes[i + 1];
         }
 
-        // Field 3: intent_type
+        // Field 2: intent_type
         let intent_type_bytes = intent_type.to_be_bytes::<32>();
         for i in 0..31 {
-            payload[3][i] = intent_type_bytes[i + 1];
+            payload[2][i] = intent_type_bytes[i + 1];
         }
 
-        // Field 4: amount
+        // Field 3: amount
         let amount_bytes = amount.to_be_bytes::<32>();
         for i in 0..31 {
-            payload[4][i] = amount_bytes[i + 1];
+            payload[3][i] = amount_bytes[i + 1];
         }
 
-        // Field 5: recipient
+        // Field 4: recipient
         let recipient_bytes = recipient.to_field().to_be_bytes::<32>();
         for i in 0..31 {
-            payload[5][i] = recipient_bytes[i + 1];
-        }
-
-        // Field 6: nonce (0 for now)
-        let nonce: Field = 0;
-        let nonce_bytes = nonce.to_be_bytes::<32>();
-        for i in 0..31 {
-            payload[6][i] = nonce_bytes[i + 1];
-        }
-
-        // Field 7: deadline (0 for now)
-        let deadline: Field = 0;
-        let deadline_bytes = deadline.to_be_bytes::<32>();
-        for i in 0..31 {
-            payload[7][i] = deadline_bytes[i + 1];
+            payload[4][i] = recipient_bytes[i + 1];
         }
 
         // Publish to Wormhole
-        // Wormhole::at(wormhole_address).publish_message_in_private(1, payload, 2, 2, caller, 0).call(
-        //     &mut context,
-        // );
+        Wormhole::at(wormhole_address)
+            .publish_message_in_private_flat(
+                1,
+                payload[0],
+                payload[1],
+                payload[2],
+                payload[3],
+                payload[4],
+                payload[5],
+                payload[6],
+                payload[7],
+                0,
+                0,
+                caller,
+                0,
+            )
+            .call(&mut context);
 
         storage
             .executed_message_hashes

@@ -19,6 +19,7 @@ import {
   getOrCreateSignerAccount,
   registerSignersInWallet,
   registerSharedStateAccountInWallet,
+  toHex0x,
 } from "../utils";
 
 export async function createMultisig(
@@ -170,6 +171,28 @@ export async function createMultisig(
   // Update multisig info with Arbitrum proxy address
   multisigInfo.arbitrumProxy = arbitrumProxy.address;
   await saveMultisig(multisigInfo);
+
+  // Register emitter on the vault
+  console.log(chalk.cyan("\nRegistering emitter on Arbitrum vault..."));
+  const { registerEmitter } = await import("./arbitrum-deployer");
+  try {
+    // Convert Aztec address to bytes32 format
+    // The address is stored as a string, convert it to AztecAddress and then to bytes32 hex
+    const aztecAddress = AztecAddress.fromString(multisigInfo.address);
+    const aztecAddressBytes32 = toHex0x(aztecAddress.toField());
+
+    await registerEmitter(aztecAddressBytes32, arbitrumProxy.address);
+    console.log(chalk.green("✅ Emitter registered successfully!"));
+  } catch (error: any) {
+    console.warn(
+      chalk.yellow(`⚠ Warning: Could not register emitter: ${error.message}`)
+    );
+    console.log(
+      chalk.yellow(
+        "   You can register it manually later using the RegisterEmitter script"
+      )
+    );
+  }
 
   // Register the multisig contract in each signer's PXE
   console.log(
