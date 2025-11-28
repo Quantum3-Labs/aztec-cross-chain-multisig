@@ -2,8 +2,6 @@
 
 Private multisig coordination for Aztec that can bridge intents to Arbitrum via Wormhole. This repository contains the Noir multisig account contract, the Solidity vault that consumes Wormhole VAAs on Arbitrum, a CLI that orchestrates user workflows, and a relayer stack that keeps both domains in sync.
 
-> Setup and run instructions are intentionally omitted here so they can be documented separately.
-
 ---
 
 ## Architecture Overview
@@ -29,12 +27,13 @@ Private multisig coordination for Aztec that can bridge intents to Arbitrum via 
 
 1. **Signer bootstrap** – `create-signer` mints a random Grumpkin keypair, deploys a Schnorr account in Aztec, and records public data in `signers.json`.
 2. **Multisig deployment** – `create-multisig` spins up a shared state account, registers every signer’s PXE, deploys the Noir `MultisigAccount`, exchanges the shared account via WebRTC, deploys an Arbitrum proxy, and registers the Aztec emitter inside the Arbitrum vault.
-3. **Proposal lifecycle** – `proposal-manager.ts` hashes intent-specific payloads (Poseidon2) and persists metadata to `pending-proposals.json`. Commands such as `propose-add-signer`, `propose-remove-signer`, `propose-change-threshold`, and `propose-cross-chain-intent` all feed this store.
-4. **Signature collection** – Each signer runs `sign-proposal`, which re-hydrates the proposal, generates a Schnorr signature, and appends it to `pending-signatures.json`. Threshold progress is computed from this file.
-5. **Execution** – Once enough signatures exist, `execute-*` commands re-create signer accounts inside their PXE wallet, build the 8-slot signature array expected by the Noir contract, submit the transaction, and persist the updated multisig state.
+<img src="https://github.com/Quantum3-Labs/aztec-cross-chain-multisig/blob/main/imgs/create-multisig.png"/>
+4. **Proposal lifecycle** – `proposal-manager.ts` hashes intent-specific payloads (Poseidon2) and persists metadata to `pending-proposals.json`. Commands such as `propose-add-signer`, `propose-remove-signer`, `propose-change-threshold`, and `propose-cross-chain-intent` all feed this store.
+5. **Signature collection** – Each signer runs `sign-proposal`, which re-hydrates the proposal, generates a Schnorr signature, and appends it to `pending-signatures.json`. Threshold progress is computed from this file.
+6. **Execution** – Once enough signatures exist, `execute-*` commands re-create signer accounts inside their PXE wallet, build the 8-slot signature array expected by the Noir contract, submit the transaction, and persist the updated multisig state.
    - For cross-chain intents the Noir contract encodes the payload and calls Wormhole’s `publish_message_in_private_flat`.
    - The Go relayer watches for that emitter, fetches the VAA, and invokes `ArbitrumIntentVault.verify`, which validates the emitter and forwards the ETH donation to the requested recipient.
-
+<img src="https://github.com/Quantum3-Labs/aztec-cross-chain-multisig/blob/main/imgs/cross-chain.png"/>
 ---
 
 ## Operational Flows
