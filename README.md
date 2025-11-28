@@ -4,7 +4,7 @@ Private multisig coordination for Aztec that can bridge intents to Arbitrum via 
 
 Multisig management demo: https://drive.google.com/file/d/1La9Z93QykAXEWgre4Q79ZBVTpvAf-Y0f/view?usp=sharing <br />
 Multisig cross chain demo: https://drive.google.com/file/d/1gWRVDAABJpS2UY-bdu_crydFhcJQ0rAp/view?usp=sharing
-
+(PLEASE SWITCH TO 720P)
 ---
 
 ## Architecture Overview
