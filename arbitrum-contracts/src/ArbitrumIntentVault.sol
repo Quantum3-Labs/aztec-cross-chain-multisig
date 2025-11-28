@@ -8,29 +8,29 @@ contract ArbitrumIntentVault is VaultGetters {
     using BytesLib for bytes;
 
     enum IntentType {
-        TRANSFER,
-        SWAP,
-        BRIDGE,
-        MULTISIG_EXECUTE,
-        CUSTOM
+        NONE,
+        TRANSFER
     }
 
     mapping(bytes32 => uint256) public intentAmounts;
     mapping(bytes32 => IntentType) public intentTypes;
     mapping(bytes32 => address) public intentTargets;
 
+    event EmitterRegistered(uint16 indexed chainId, bytes32 emitterAddress);
     event IntentProcessed(
         bytes32 indexed txId,
         IntentType intentType,
         address target,
         uint256 amount
     );
-
     event IntentExecuted(
         bytes32 indexed txId,
         IntentType intentType,
         bool success
     );
+    event PayloadDebug(bytes32 payload);
+    event DebugUint256(uint256 amount);
+    event DebugAddress(address recipient);
 
     constructor(
         address payable wormholeAddr,
@@ -48,7 +48,21 @@ contract ArbitrumIntentVault is VaultGetters {
         )
     {}
 
-    function verifyAndProcessIntent(bytes memory encodedVm) external {
+    function registerEmitter(
+        uint16 chainId_,
+        bytes32 emitterAddress_
+    ) external onlyOwner {
+        require(
+            emitterAddress_ != bytes32(0),
+            "Emitter address cannot be zero"
+        );
+
+        _state.registeredEmitters[chainId_] = emitterAddress_;
+
+        emit EmitterRegistered(chainId_, emitterAddress_);
+    }
+
+    function verify(bytes memory encodedVm) external {
         bytes memory payload = _verify(encodedVm);
         _processIntentPayload(payload);
     }
@@ -56,74 +70,110 @@ contract ArbitrumIntentVault is VaultGetters {
     function _verify(
         bytes memory encodedVm
     ) internal view returns (bytes memory) {
+        // Parse and verify the VAA through Wormhole
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole()
             .parseAndVerifyVM(encodedVm);
-        require(valid, reason);
 
-        bytes32 registeredEmitter = vaultContracts(vm.emitterChainId);
-        require(registeredEmitter == vm.emitterAddress, "Invalid emitter");
+        // Ensure the VAA signature is valid
+        require(valid, reason);
 
         return vm.payload;
     }
 
     function _processIntentPayload(bytes memory payload) internal {
-        // Aztec sends 8 chunks of 31 bytes each = 248 bytes total
-        require(payload.length >= 124, "Payload too short");
+        require(!isFork(), "Invalid fork: expected chainID mismatch");
+        // Payload structure: 32-byte chunks
+        // [txId (32), action (32), target_chain (32), target_contract (32), intent_type (32), amount (32), recipient (32), ...]
+        require(payload.length >= 127, "Payload too short");
 
-        // Parse 31-byte chunks from Aztec
-        bytes32 txId = bytes32(
-            bytes.concat(bytes1(0), BytesLib.slice(payload, 0, 31))
+        bytes32 txId;
+        assembly {
+            txId := mload(add(payload, 32))
+        }
+        emit PayloadDebug(txId);
+
+        // extract target chain
+        bytes32 targetChain;
+        assembly {
+            targetChain := mload(add(payload, 64))
+            targetChain := shr(8, targetChain)
+        }
+        uint256 targetChainId = uint256(targetChain);
+        require(targetChainId == block.chainid, "Invalid target chain");
+
+        // extract target contract
+        bytes32 targetContract;
+        assembly {
+            targetContract := mload(add(payload, 96))
+            targetContract := shr(12, targetContract)
+            targetContract := shl(92, targetContract)
+        }
+        // turn target contract to address
+        address targetContractAddress = address(
+            uint160(bytes20(targetContract))
+        );
+        emit DebugAddress(targetContractAddress);
+        emit DebugAddress(address(this));
+        require(
+            targetContractAddress == address(this),
+            "Invalid target contract"
         );
 
-        uint256 intentTypeRaw = uint256(
-            bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 31, 31)))
+        // extract intent type
+        bytes32 intentType;
+        assembly {
+            intentType := mload(add(payload, 127))
+            intentType := shr(16, intentType)
+        }
+        IntentType intentTypeEnum = IntentType(uint256(intentType));
+
+        // extract amount
+        bytes32 amount;
+        assembly {
+            amount := mload(add(payload, 160))
+            amount := shr(8, amount)
+        }
+        uint256 amountUint = uint256(amount);
+        require(amountUint > 0, "Invalid amount");
+
+        // extract recipient
+        bytes32 recipient;
+        assembly {
+            recipient := mload(add(payload, 192))
+            recipient := shr(16, recipient)
+            recipient := shl(96, recipient)
+        }
+        // turn bytes32 to address
+        address recipientAddress = address(bytes20(recipient));
+        require(recipientAddress != address(0), "Invalid recipient");
+
+        _state.arbitrumMessages[txId] = amountUint;
+        intentAmounts[txId] = amountUint;
+        intentTypes[txId] = intentTypeEnum;
+        intentTargets[txId] = recipientAddress;
+
+        emit IntentProcessed(
+            txId,
+            intentTypeEnum,
+            recipientAddress,
+            amountUint
         );
-
-        // Extract Ethereum address from payload_3 (bytes 11-30 of the 31-byte chunk)
-        bytes memory addressBytes = BytesLib.slice(payload, 62 + 11, 20);
-        address targetAddress = address(uint160(bytes20(addressBytes)));
-
-        uint256 amount = uint256(
-            bytes32(bytes.concat(bytes1(0), BytesLib.slice(payload, 93, 31)))
-        );
-
-        require(txId != bytes32(0), "Invalid txId");
-        require(_state.arbitrumMessages[txId] == 0, "Already processed");
-
-        IntentType intentType = IntentType(intentTypeRaw);
-
-        _state.arbitrumMessages[txId] = amount;
-        intentAmounts[txId] = amount;
-        intentTypes[txId] = intentType;
-        intentTargets[txId] = targetAddress;
-
-        emit IntentProcessed(txId, intentType, targetAddress, amount);
 
         bool success = _executeIntent(
-            txId,
-            intentType,
-            targetAddress,
-            amount,
-            payload
+            intentTypeEnum,
+            recipientAddress,
+            amountUint
         );
-        emit IntentExecuted(txId, intentType, success);
+        emit IntentExecuted(txId, intentTypeEnum, success);
     }
 
     function _executeIntent(
-        bytes32 txId,
         IntentType intentType,
         address target,
-        uint256 amount,
-        bytes memory payload
+        uint256 amount
     ) internal returns (bool) {
         if (intentType == IntentType.TRANSFER) {
             return _handleTransfer(target, amount);
-        } else if (intentType == IntentType.SWAP) {
-            return _handleSwap(txId, target, amount, payload);
-        } else if (intentType == IntentType.MULTISIG_EXECUTE) {
-            return _handleMultisigExecute(txId, target, payload);
-        } else if (intentType == IntentType.BRIDGE) {
-            return _handleBridge(txId, target, amount);
         }
         return false;
     }
@@ -132,50 +182,9 @@ contract ArbitrumIntentVault is VaultGetters {
         address target,
         uint256 amount
     ) internal returns (bool) {
-        if (amount > 0 && address(donationContract()) != address(0)) {
-            donationContract().donate(amount);
-            return true;
-        }
-        return false;
-    }
-
-    function _handleSwap(
-        bytes32 txId,
-        address target,
-        uint256 amount,
-        bytes memory payload
-    ) internal returns (bool) {
         if (amount > 0) {
-            donationContract().donate(amount);
-            return true;
-        }
-        return false;
-    }
-
-    function _handleMultisigExecute(
-        bytes32 txId,
-        address target,
-        bytes memory payload
-    ) internal returns (bool) {
-        if (payload.length > 155 && target != address(0)) {
-            bytes memory callData = BytesLib.slice(
-                payload,
-                155,
-                payload.length - 155
-            );
-            (bool success, ) = target.call(callData);
-            return success;
-        }
-        return false;
-    }
-
-    function _handleBridge(
-        bytes32 txId,
-        address target,
-        uint256 amount
-    ) internal returns (bool) {
-        if (amount > 0) {
-            donationContract().donate(amount);
+            // transfer eth to target
+            donationContract().donate(amount, target);
             return true;
         }
         return false;
@@ -193,11 +202,13 @@ contract ArbitrumIntentVault is VaultGetters {
         target = intentTargets[txId];
     }
 
-    function registerEmitter(
-        uint16 chainId_,
-        bytes32 emitterAddress_
-    ) external onlyOwner {
-        require(emitterAddress_ != bytes32(0), "Invalid emitter");
-        _state.vaultImplementations[chainId_] = emitterAddress_;
+    function verifyAuthorizedEmitter(
+        IWormhole.VM memory vm
+    ) internal view returns (bool) {
+        // Check if the emitter is registered for this chain
+        bytes32 registeredEmitter = getRegisteredEmitter(vm.emitterChainId);
+
+        // Return true if the emitter matches the registered one
+        return registeredEmitter == vm.emitterAddress;
     }
 }

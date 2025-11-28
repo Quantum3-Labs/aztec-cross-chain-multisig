@@ -1,45 +1,38 @@
-import { Grumpkin, GrumpkinScalar, PXE } from "@aztec/aztec.js";
+import { Fr, GrumpkinScalar } from "@aztec/aztec.js/fields";
+import { toHex0x } from "../../cli/utils";
+import { Grumpkin } from "@aztec/foundation/crypto";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { setupSponsoredFPC } from "../../cli/sponsored_fpc";
-import { toFr, toHex0x } from "../../cli/utils";
-import { SALT, SECRET_KEY } from "../../cli/constants";
-import { getSchnorrAccount } from "@aztec/accounts/schnorr";
-import { randomBytes, randomInt } from "crypto";
+import { TestWallet } from "@aztec/test-wallet/server";
+export async function createSigner(wallet: TestWallet) {
+  const fee = await setupSponsoredFPC(wallet);
 
-export async function createSigner(pxe: PXE) {
-  const privateKey = GrumpkinScalar.random();
+  let secretKey = Fr.random();
+  let signingKey = GrumpkinScalar.random();
+  let salt = Fr.random();
+  let account = await wallet.createSchnorrAccount(secretKey, salt, signingKey);
   const grumpkin = new Grumpkin();
   const generator = grumpkin.generator();
-  const publicKey = await grumpkin.mul(generator, privateKey);
-  const secretKey = toFr(randomInt(0, 2 ** 8 - 1).toString());
-  const saltKey = toFr(randomInt(0, 2 ** 8 - 1).toString());
-  const newAccount = await getSchnorrAccount(
-    pxe,
-    secretKey,
-    privateKey,
-    saltKey
-  );
-  const fee = await setupSponsoredFPC();
+  const publicKey = await grumpkin.mul(generator, signingKey);
 
-  await newAccount
-    .deploy({
-      fee: fee,
-    })
-    .wait({
-      timeout: 300_000,
-    });
-  const newWallet = await newAccount.getWallet();
-  const newAccountAddress = newWallet.getAddress();
-  // register into pxe
-  await newAccount.register();
+  const tx = await (await account.getDeployMethod())
+    .send({ from: AztecAddress.ZERO, fee: fee })
+    .wait();
+
+  await wallet.registerSender(account.address);
+
+  // print out the accounts in wallet
+  const accounts = await wallet.getAccounts();
+  console.log("accounts:", accounts);
 
   return {
-    address: newAccountAddress.toString(),
-    privateKey: toHex0x(privateKey),
+    address: (await account.getAccount()).getAddress().toString(),
+    privateKey: toHex0x(signingKey),
     publicKeyX: toHex0x(publicKey.x),
     publicKeyY: toHex0x(publicKey.y),
     createdAt: new Date().toISOString(),
     secretKey: secretKey,
-    saltKey: saltKey,
-    wallet: newWallet,
+    saltKey: salt,
+    wallet: account,
   };
 }

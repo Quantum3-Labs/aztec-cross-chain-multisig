@@ -1,9 +1,6 @@
-use aztec::{
-    macros::notes::note,
-    protocol_types::{address::AztecAddress, traits::{Hash, Packable, Serialize}},
-};
+use aztec::protocol_types::{address::AztecAddress, traits::{Deserialize, FromField, Serialize}};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Signature {
     pub signature: [u8; 64],
     pub owner: AztecAddress,

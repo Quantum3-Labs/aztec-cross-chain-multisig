@@ -18,7 +18,9 @@
     "**/*.ts",
     "cli/wormhole/deploy.js",
     "cli/wormhole/deploy.mjs",
-    "multisig_account/DefaultAccountContract.js"
+    "multisig_account/DefaultAccountContract.js",
+    "tests/multisig-e2e.test.ts",
+    "cli/wallet/deployment_manager.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

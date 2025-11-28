@@ -1,8 +1,26 @@
 [
   {
     "name": "company-Proxy",
-    "address": "0xd95D3C798908a2545D5848695d6f88F3839b7573",
+    "address": "0xf36aaEE83f01Aa9D115Be47447FAb0B73651BC7E",
     "multisigName": "company",
-    "createdAt": "2025-10-27T08:34:10.807Z"
+    "createdAt": "2025-11-28T06:45:25.949Z"
+  },
+  {
+    "name": "company1-Proxy",
+    "address": "0x9F258b7Bf79025bAb5cFA166155f5B038AdEBA6F",
+    "multisigName": "company1",
+    "createdAt": "2025-11-28T07:29:49.421Z"
+  },
+  {
+    "name": "company2-Proxy",
+    "address": "0x5F991Bb52683824442599fbB5CE1e3950a3f1BD7",
+    "multisigName": "company2",
+    "createdAt": "2025-11-28T07:56:52.807Z"
+  },
+  {
+    "name": "company3-Proxy",
+    "address": "0x626Ea5383e40D743DFDdc94EB85d7bd6ddfFe3Eb",
+    "multisigName": "company3",
+    "createdAt": "2025-11-28T08:59:51.780Z"
   }
 ]

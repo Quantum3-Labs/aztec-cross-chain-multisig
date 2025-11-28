@@ -1,7 +1,6 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
-import { Fr } from "@aztec/aztec.js";
 import { poseidon2Hash } from "@aztec/foundation/crypto";
 import {
   Signer,
@@ -10,6 +9,7 @@ import {
   getCurrentMultisig,
 } from "./signer-manager";
 import { signMessage, toScalar, toFr } from "../utils";
+import { Fr } from "@aztec/foundation/fields";
 
 const PENDING_PROPOSALS_FILE = path.resolve(
   process.cwd(),
@@ -50,15 +50,18 @@ export interface AddSignerData {
   newSignerAddress: string;
   newSignerPublicKeyX: string;
   newSignerPublicKeyY: string;
+  deadline: string;
 }
 
 export interface RemoveSignerData {
   targetSignerName: string;
   targetSignerAddress: string;
+  deadline: string;
 }
 
 export interface ChangeThresholdData {
   newThreshold: number;
+  deadline: string;
 }
 
 export interface CrossChainIntentData {
@@ -144,46 +147,48 @@ export async function createProposal(
   switch (type) {
     case "add_signer":
       const addData = data as AddSignerData;
+      // Contract: poseidon2_hash([new_signer.to_field(), new_signer_pk_x, new_signer_pk_y, deadline as Field])
       messageHash = await poseidon2Hash([
-        Fr.fromString("7"), // Action type: add signer
-        Fr.fromString(currentMultisig.address),
         Fr.fromString(addData.newSignerAddress),
         Fr.fromString(addData.newSignerPublicKeyX),
         Fr.fromString(addData.newSignerPublicKeyY),
-        Fr.fromString(Date.now().toString()),
+        Fr.fromString(addData.deadline),
       ]);
       break;
 
     case "remove_signer":
       const removeData = data as RemoveSignerData;
+      // Contract: poseidon2_hash([target_signer.to_field(), deadline as Field])
       messageHash = await poseidon2Hash([
-        Fr.fromString("8"), // Action type: remove signer
-        Fr.fromString(currentMultisig.address),
         Fr.fromString(removeData.targetSignerAddress),
-        Fr.fromString(Date.now().toString()),
+        Fr.fromString(removeData.deadline),
       ]);
       break;
 
     case "change_threshold":
       const thresholdData = data as ChangeThresholdData;
+      // Contract: poseidon2_hash([new_threshold as Field, deadline as Field])
       messageHash = await poseidon2Hash([
-        Fr.fromString("9"), // Action type: change threshold
-        Fr.fromString(currentMultisig.address),
         Fr.fromString(thresholdData.newThreshold.toString()),
-        Fr.fromString(Date.now().toString()),
+        Fr.fromString(thresholdData.deadline),
       ]);
       break;
 
     case "cross_chain_intent":
       const crossChainData = data as CrossChainIntentData;
+      // Contract: poseidon2_hash([target_chain, target_contract.to_field(), intent_type, amount, recipient.to_field(), deadline as Field])
+      // Note: target_contract and recipient need to be converted from Ethereum address to Aztec address, then to Field
+      const { ethToAztecAddress } = await import("../utils");
+      const targetContractAddr = ethToAztecAddress(
+        crossChainData.targetContract
+      );
+      const recipientAddr = ethToAztecAddress(crossChainData.recipient);
       messageHash = await poseidon2Hash([
-        Fr.fromString("1"), // Action type: cross chain intent
         Fr.fromString(crossChainData.targetChain),
-        Fr.fromString(crossChainData.targetContract),
+        targetContractAddr,
         Fr.fromString(crossChainData.intentType),
         Fr.fromString(crossChainData.amount),
-        Fr.fromString(crossChainData.recipient),
-        Fr.fromString("0"), // nonce
+        recipientAddr,
         Fr.fromString(crossChainData.deadline),
       ]);
       break;
@@ -314,31 +319,37 @@ export async function proposeAddSigner(
   newSignerName: string,
   newSignerAddress: string,
   newSignerPublicKeyX: string,
-  newSignerPublicKeyY: string
+  newSignerPublicKeyY: string,
+  deadline: string
 ): Promise<Proposal> {
   return createProposal("add_signer", {
     newSignerName,
     newSignerAddress,
     newSignerPublicKeyX,
     newSignerPublicKeyY,
+    deadline,
   });
 }
 
 export async function proposeRemoveSigner(
   targetSignerName: string,
-  targetSignerAddress: string
+  targetSignerAddress: string,
+  deadline: string
 ): Promise<Proposal> {
   return createProposal("remove_signer", {
     targetSignerName,
     targetSignerAddress,
+    deadline,
   });
 }
 
 export async function proposeChangeThreshold(
-  newThreshold: number
+  newThreshold: number,
+  deadline: string
 ): Promise<Proposal> {
   return createProposal("change_threshold", {
     newThreshold,
+    deadline,
   });
 }
 
